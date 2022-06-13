@@ -111,6 +111,8 @@ There are four notable pools of data which are relevant to djafs.
    beginning to end, with newer records overriding the previous ones.
    In the special case of a file deletion, the target will be the empty
    string instead of a hashed file's name.
+   Notably, when a file is "modified", the original data is never overwritten, 
+   as it is a hashed file; instead the new file is stored next to it and referenced.
    To parse the file to a specific snapshot in time, the metadata file will be
    parsed up until the first record which has a date after the snapshot date.
    To reduce the number of entries in the metadata file, consecutive entries
