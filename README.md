@@ -1,4 +1,5 @@
-
+# djafs - the Dendra JSON Archive File System
+(DeeJay-fs)
 ## Background info
 Original documentation on fuse:
 [fuse at nmsu](https://www.cs.nmsu.edu/~pfeiffer/fuse-tutorial/html/index.html)
@@ -10,14 +11,16 @@ Original documentation on fuse:
 ### Blog Example
 [link to blog](https://blog.trieoflogs.com/2021-05-25-fuse-filesystem-go/)
 
-Note, the blog example is the one that will be followed when building the fuse driver.
-However, at early inspection, there's a notable bug in it: the inode counter doesn't use an atomic counter, but it should.
+Note, the blog example is the one that will be followed when building 
+the fuse driver. However, at early inspection, there's a notable bug 
+in it: the inode counter doesn't use an atomic counter, but it should.
 
 ## Problem
 The archive is currently a simple, file-backed system.
 Nested year/month/day folders separate json files.
 These json files are taking up far too much space, and are highly compressible.
-It would be great to store the files compressed, and decompress them as needed on the fly when needed.
+It would be great to store the files compressed, and decompress them 
+on the fly when needed.
 
 ## Constraints
 Must haves:
@@ -29,15 +32,18 @@ Must haves:
 - Good documentation. See: README.md
 
 Nice to haves:
-- We would like to be able to see a snapshot of the archive as it was for any given day
-- We would like the driver to be extensible such that file creation can be blocked
+- We would like to be able to see a snapshot of the archive
+  as it was for any given day
+- We would like the driver to be extensible such that file
+  creation can be blocked
   - block creation of empty file on top of non-empty file
 
 
 ## Architecture / Design
 
 ### Similar work
-As with anything, let's use the same principles used elsewhere in software architecture.
+As with anything, let's use the same principles used elsewhere
+in software architecture.
 This architecture is similar to the following concepts:
  - influxdb write-through caching / garbage collection
  - inode / dirent scaffolding
@@ -47,7 +53,95 @@ This architecture is similar to the following concepts:
  - heap / stack memory model
  - probably a lot more
 
+### Assumptions
+ - To make things simpler, when viewing snapshots, we assume no time-series
+   data could have been generated for a date more than 24 hours in
+   the future from the snapshot date.
 
+### Design
 
-
-
+There are four notable pools of data which are relevant to djafs.
+1. FUSE Interface.
+   The interface will follow the exact same directory structure as what's
+   currently used, with nested directories of json.
+   One notable exception is that there will be one additional top-level
+   directory, "live" above the nested directories.
+   The mountpoint for the JSON Archive API will be the "live" directory.
+   At the same level as the "live" folder, will be a directory
+   called "snapshots".
+   Inside of snapshots, a library of babel-style directory tree
+   "exists" (is generated on-the-fly).
+   To see a snapshot of data for a given day, `cd` into the directory with
+   that date as the path (i.e. `cd snapshots/2022/07/13/data`)
+   As the actual data is not stored in the interface, the interface itself
+   can be on a host drive (only a mountpoint is required.)
+1. Data Backend.
+   The data backend follows the same directory structure as the current data,
+   but is gzipped at the weekly (or monthly) level.
+   The exact splitting level will require analysis to determine the optimal
+   tradeoff between memory, speed, and storage.
+   Packing more days of data into the same files will give better compression
+   and fewer real inodes, but will require more memory and CPU to
+   pack and unpack.
+   As the data itself is all zip files, no external software besides the
+   coreutils should be required to manually intervene if necessary.
+1. Metadata.
+   When data is added to the archive, if the timestamp is used as the filename,
+   it may overwrite previous content, which makes snapshots impossible.
+   Instead, added files are hashed using SHA-256, and stored as `<HASH>.<ext>`.
+   Since the filename was the timestamp and had special meaning, the
+   correlation between the hashed file's name and timestamp
+   needs to be recorded.
+   Because there are potentially millions of files, this data should be
+   stored compressed as well.
+   A binary data format would work well for this, but breaks the rule of
+   "no external tools or data formats", as a corruption of the binary file
+   would result in data loss.
+   Instead, a tradeoff will be made, and the inode / dirent model is followed:
+   there is no global metadata file, instead, each gzip file contains its
+   own metadata file.
+   The metadata file will be JSON, and get compressed alongside the data,
+   into a file named `metadata.json`.
+   The metadata recorded will contain a lookup from the timestamp filenames
+   that should exist for a directory of data to the backing hashed files.
+   The metadata records will be arranged as an array of objects, containing
+   the filename, target, and modification date (as a unix timestamp)
+   for the record.
+   To parse the file properly, the array of data will be read in from
+   beginning to end, with newer records overriding the previous ones.
+   In the special case of a file deletion, the target will be the empty
+   string instead of a hashed file's name.
+   To parse the file to a specific snapshot in time, the metadata file will be
+   parsed up until the first record which has a date after the snapshot date.
+   To reduce the number of entries in the metadata file, consecutive entries
+   for a given filename which point to the same hashed file target can have
+   the second entry eliminated since it's effectively a statement of "no change".
+1. Hot Cache.
+   Writing files to any filesystem can be slow if writes are synchronous,
+   especially if the filesystem in question is a hashing compression filesystem.
+   Additionally, the reading patterns of the filesystem are known to be
+   heavily sequential, so to optimize for CPU and memory, it makes sense to
+   cache the decompression artifacts.
+   An extra folder for reads and writes will be created alongside
+   the backing data for this purpose.
+   When a file is added to the archive, the direct file operations will only
+   add it to the hot cache folder, writing it through without
+   hashing or compressing.
+   Periodically, a "garbage collection" process will collect all newly added
+   files from the hot cache and bake them into the data backend by hashing
+   them, decompressing the relevant archive, adding an entry to the
+   metadata file, and recompressing the archive.
+   Notably, functionality for backups will be made available, which
+   temporarily disables the garbage collection procedure.
+   This is so that when an external process copies the backing
+   files somewhere else, there's not a moving target.
+   This functionality is preferred over building a backup solution into the
+   fuse driver itself because the backup solution may change over time, and
+   changing the backup logic would require taking down the driver
+   and bringing it back up.
+   Additionally, the chance of critical errors occuring increases exponentially
+   when a filesystem driver now must communicate over the internet.
+   When a file is read from the archive, the zip file is decompressed and the
+   manifest is parsed as described above.
+   The destination location for the archive expansion is marked in an in-memory
+   data structure and scheduled for deletion in an LRU-style queue.
