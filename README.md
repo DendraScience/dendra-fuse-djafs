@@ -7,19 +7,20 @@ Original documentation on fuse:
 ### Bazel example
 [link to hellofs docs](https://pkg.go.dev/bazil.org/fuse@v0.0.0-20200524192727-fb710f7dfd05/examples/hellofs)
 [link to gh repo](https://github.com/bazil/fuse/blob/fb710f7dfd05/examples/hellofs/hello.go)
+[Bazel ZipFS](https://github.com/bazil/zipfs)
 
 ### Blog Example
 [link to blog](https://blog.trieoflogs.com/2021-05-25-fuse-filesystem-go/)
 
-Note, the blog example is the one that will be followed when building 
-the fuse driver. However, at early inspection, there's a notable bug 
+Note, the blog example is the one that will be followed when building
+the fuse driver. However, at early inspection, there's a notable bug
 in it: the inode counter doesn't use an atomic counter, but it should.
 
 ## Problem
 The archive is currently a simple, file-backed system.
 Nested year/month/day folders separate json files.
 These json files are taking up far too much space, and are highly compressible.
-It would be great to store the files compressed, and decompress them 
+It would be great to store the files compressed, and decompress them
 on the fly when needed.
 
 ## Constraints
@@ -111,7 +112,7 @@ There are four notable pools of data which are relevant to djafs.
    beginning to end, with newer records overriding the previous ones.
    In the special case of a file deletion, the target will be the empty
    string instead of a hashed file's name.
-   Notably, when a file is "modified", the original data is never overwritten, 
+   Notably, when a file is "modified", the original data is never overwritten,
    as it is a hashed file; instead the new file is stored next to it and referenced.
    To parse the file to a specific snapshot in time, the metadata file will be
    parsed up until the first record which has a date after the snapshot date.
@@ -147,3 +148,28 @@ There are four notable pools of data which are relevant to djafs.
    manifest is parsed as described above.
    The destination location for the archive expansion is marked in an in-memory
    data structure and scheduled for deletion in an LRU-style queue.
+
+### Filesystem Structure
+
+Compressed files use the extension `.djfz`
+Manifest (lookup table) files will use the extension `.djfl`
+Metadata files will use the extension `.djfm`
+
+Uncompressed metadata files will contain the following data for quick summary/metrics calculations:
+ - Version of djfs used to pack the archive (useful for migrations)
+ - Last update (useful for timestamps)
+ - Oldest file timestamp
+ - Compressed file Size
+ - Uncompressed file size
+ - Count of Unique files
+
+
+
+## Development Roadmap
+
+1. Build out "utility functions" and tests
+  - Count all files under a subfolder until X
+  - Metadata generator
+  - sha256 renamer + lookup table creator
+1. Create loader
+1. Create unloader
