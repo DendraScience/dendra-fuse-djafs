@@ -7,6 +7,65 @@ import (
 	"testing"
 )
 
+func TestDetermineZipBoundaries(t *testing.T) {
+	t.Run("Triple nested subfolders without higher files", func(t *testing.T) {
+		dir := t.TempDir()
+		var patha = filepath.Join(dir, "a")
+		os.Mkdir(patha, 0755)
+		pathb1 := filepath.Join(patha, "b1")
+		os.Mkdir(pathb1, 0755)
+		pathb2 := filepath.Join(patha, "b2")
+		os.Mkdir(pathb2, 0755)
+
+		for i := 0; i < 5; i++ {
+			os.Create(filepath.Join(pathb1, fmt.Sprintf("%d", i)))
+			os.Create(filepath.Join(pathb2, fmt.Sprintf("%d", i)))
+		}
+
+		roots, err := DetermineZipBoundaries(dir, 5)
+		fmt.Printf("Roots: %v\tError: %v \n", roots, err)
+	})
+	t.Run("Quadruple nested subfolders without higher files", func(t *testing.T) {
+		dir := t.TempDir()
+		var patha = filepath.Join(dir, "a")
+		os.Mkdir(patha, 0755)
+		pathb1 := filepath.Join(patha, "b1")
+		os.Mkdir(pathb1, 0755)
+		pathb2 := filepath.Join(patha, "b2")
+		os.Mkdir(pathb2, 0755)
+		pathc1 := filepath.Join(pathb2, "c1")
+		pathc2 := filepath.Join(pathb2, "c2")
+		os.Mkdir(pathc2, 0755)
+		os.Mkdir(pathc1, 0755)
+
+		for i := 0; i < 5; i++ {
+			os.Create(filepath.Join(pathb1, fmt.Sprintf("%d", i)))
+			os.Create(filepath.Join(pathc2, fmt.Sprintf("%d", i)))
+			os.Create(filepath.Join(pathc1, fmt.Sprintf("%d", i)))
+		}
+
+		roots, err := DetermineZipBoundaries(dir, 11)
+		fmt.Printf("Roots: %v\tError: %v \n", roots, err)
+	})
+	t.Run("Triple nested subfolders with a higher file", func(t *testing.T) {
+		dir := t.TempDir()
+		var patha = filepath.Join(dir, "a")
+		os.Mkdir(patha, 0755)
+		pathb1 := filepath.Join(patha, "b1")
+		os.Mkdir(pathb1, 0755)
+		pathb2 := filepath.Join(patha, "b2")
+		os.Mkdir(pathb2, 0755)
+
+		for i := 0; i < 5; i++ {
+			os.Create(filepath.Join(pathb1, fmt.Sprintf("%d", i)))
+			os.Create(filepath.Join(pathb2, fmt.Sprintf("%d", i)))
+		}
+		os.Create(filepath.Join(patha, fmt.Sprintf("%d", 0)))
+
+		roots, err := DetermineZipBoundaries(dir, 5)
+		fmt.Printf("Roots: %v\tError: %v \n", roots, err)
+	})
+}
 func TestCountSubfile(t *testing.T) {
 	testCases := []struct {
 		Name          string

@@ -48,3 +48,30 @@ func CountSubfile(path string, target int) (count int, overage bool, err error) 
 	}
 	return
 }
+
+func DetermineZipBoundaries(path string, target int) (relativeRoots []string, err error) {
+	_, over, err := CountSubfile(path, target)
+	if err != nil {
+		return []string{}, err
+	}
+	if !over {
+		return []string{path}, nil
+	}
+	files, err := ioutil.ReadDir(path)
+	hasFiles := false
+	for _, f := range files {
+		if !f.IsDir() {
+			hasFiles = true
+		} else {
+			children, err := DetermineZipBoundaries(filepath.Join(path, f.Name()), target)
+			if err != nil {
+				return []string{}, err
+			}
+			relativeRoots = append(relativeRoots, children...)
+		}
+	}
+	if hasFiles {
+		relativeRoots = append(relativeRoots, path)
+	}
+	return
+}

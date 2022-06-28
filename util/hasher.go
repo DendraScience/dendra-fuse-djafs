@@ -15,6 +15,7 @@ var ErrExpectedFile error
 
 type LookupTable struct {
 	Entries EntrySet `json:"entries"`
+	sorted  bool
 }
 
 type EntrySet []LookupEntry
@@ -93,6 +94,7 @@ func (l LookupTable) GetTargetFileCount() int {
 	return len(files)
 }
 
+//TODO Optimization: consider using a taint variable instead of sorting on every addition
 func (l LookupTable) AddFileEntry(e LookupEntry) LookupTable {
 	l.Entries = append(l.Entries, e)
 	sort.Sort(l.Entries)
@@ -135,6 +137,5 @@ func GetFileDotExtension(path string) string {
 	return "." + split[len(split)-1]
 }
 
-func HashFile(path string) error {
-	return nil
-}
+//TODO add LookupTableCollapse function for combining consecutive entries
+// of the same name to target
