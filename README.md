@@ -161,6 +161,7 @@ Uncompressed metadata files will contain the following data for quick summary/me
  - Oldest file timestamp
  - Compressed file Size
  - Uncompressed file size
+ - Count of Files
  - Count of Unique files
 
 
