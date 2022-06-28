@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -77,6 +78,35 @@ func (l LookupTable) GetNewestFileTS() time.Time {
 	return l.Entries[len(l.Entries)-1].Modified
 }
 
+func (l LookupTable) GetTotalFileCount() int {
+	files := make(map[string]bool)
+	for _, e := range l.Entries {
+		files[e.Name] = true
+	}
+	return len(files)
+}
+func (l LookupTable) GetTargetFileCount() int {
+	files := make(map[string]bool)
+	for _, e := range l.Entries {
+		files[e.Target] = true
+	}
+	return len(files)
+}
+
+func (l LookupTable) AddFileEntry(e LookupEntry) LookupTable {
+	l.Entries = append(l.Entries, e)
+	sort.Sort(l.Entries)
+	return l
+}
+
+func (l LookupTable) GetUncompressedSize() int {
+	total := 0
+	for _, e := range l.Entries {
+		total += int(e.FileSize)
+	}
+	return total
+}
+
 func GetFileHash(path string) (hash string, err error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -103,4 +133,8 @@ func GetFileDotExtension(path string) string {
 		return ""
 	}
 	return "." + split[len(split)-1]
+}
+
+func HashFile(path string) error {
+	return nil
 }
