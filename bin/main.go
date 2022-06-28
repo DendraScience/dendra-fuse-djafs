@@ -1,15 +1,24 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/dendrascience/dendra-archive-fuse/util"
 )
 
 func main() {
-	roots, err := util.DetermineZipBoundaries(".", 50)
+	dirs, files, err := util.DetermineZipBoundaries(".", 50)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("roots: %v\n", roots)
+	_ = files
+	err = util.ZipInside(dirs[0], "", false)
+	if err != nil {
+		fmt.Printf("%v\n", err)
+	}
+	err = util.ZipInside(dirs[0], "", true)
+	if err != nil {
+		fmt.Printf("%v\n", err)
+	}
 }
