@@ -1,15 +1,18 @@
 package util
 
-import "time"
+import (
+	"os"
+	"time"
+)
 
 type Metadata struct {
+	CompressedSize   int
 	DJFSVersion      string
 	NewestFileTS     time.Time
 	OldestFileTS     time.Time
-	CompressedSize   int
-	UncompressedSize int
-	TotalFileCount   int
 	TargetFileCount  int
+	TotalFileCount   int
+	UncompressedSize int
 }
 
 func GetVersion() string {
@@ -21,13 +24,20 @@ func GetVersion() string {
 // as incrementing counters and size provided a file is new, etc. instead of calling
 // LT member funcs
 
+// Using a Lookup Struct and passing the path to a zip file, we can create the
+// metadata struct file to accompany the zip
 func (l LookupTable) GenerateMetadata(path string) (Metadata, error) {
 	var m Metadata
+	stat, err := os.Stat(path)
+	if err != nil {
+		return m, err
+	}
+	m.CompressedSize = int(stat.Size())
 	m.DJFSVersion = GetVersion()
-	m.OldestFileTS = l.GetOldestFileTS()
 	m.NewestFileTS = l.GetNewestFileTS()
-	m.UncompressedSize = l.GetUncompressedSize()
-	m.TotalFileCount = l.GetTotalFileCount()
+	m.OldestFileTS = l.GetOldestFileTS()
 	m.TargetFileCount = l.GetTargetFileCount()
+	m.TotalFileCount = l.GetTotalFileCount()
+	m.UncompressedSize = l.GetUncompressedSize()
 	return m, nil
 }

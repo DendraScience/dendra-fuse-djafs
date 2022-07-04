@@ -22,8 +22,8 @@ func TestDetermineZipBoundaries(t *testing.T) {
 			os.Create(filepath.Join(pathb2, fmt.Sprintf("%d", i)))
 		}
 
-		dirs, files, err := DetermineZipBoundaries(dir, 5)
-		fmt.Printf("Dirss: %v\tFiles: %s\tError: %v \n", dirs, files, err)
+		// dirs, files, err := DetermineZipBoundaries(dir, 5)
+		//fmt.Printf("Dirss: %v\tFiles: %s\tError: %v \n", dirs, files, err)
 	})
 	t.Run("Quadruple nested subfolders without higher files", func(t *testing.T) {
 		dir := t.TempDir()
@@ -44,8 +44,8 @@ func TestDetermineZipBoundaries(t *testing.T) {
 			os.Create(filepath.Join(pathc1, fmt.Sprintf("%d", i)))
 		}
 
-		dirs, files, err := DetermineZipBoundaries(dir, 11)
-		fmt.Printf("Dirss: %v\tFiles: %s\tError: %v \n", dirs, files, err)
+		//	dirs, files, err := DetermineZipBoundaries(dir, 11)
+		//fmt.Printf("Dirss: %v\tFiles: %s\tError: %v \n", dirs, files, err)
 	})
 	t.Run("Triple nested subfolders with a higher file", func(t *testing.T) {
 		dir := t.TempDir()
@@ -62,8 +62,8 @@ func TestDetermineZipBoundaries(t *testing.T) {
 		}
 		os.Create(filepath.Join(patha, fmt.Sprintf("%d", 0)))
 
-		dirs, files, err := DetermineZipBoundaries(dir, 5)
-		fmt.Printf("Dirss: %v\tFiles: %s\tError: %v \n", dirs, files, err)
+		// dirs, files, err := DetermineZipBoundaries(dir, 5)
+		//fmt.Printf("Dirss: %v\tFiles: %s\tError: %v \n", dirs, files, err)
 	})
 }
 func TestCountSubfile(t *testing.T) {
