@@ -11,7 +11,7 @@ import (
 var ErrExpectedDirectory error
 
 func init() {
-	ErrExpectedDirectory = errors.New("Expected directory but got file")
+	ErrExpectedDirectory = errors.New("expected directory but got file")
 }
 
 func CountSubfile(path string, target int) (count int, overage bool, err error) {
@@ -25,7 +25,7 @@ func CountSubfile(path string, target int) (count int, overage bool, err error) 
 		err = ErrExpectedDirectory
 		return
 	}
-	files := []fs.FileInfo{}
+	var files []fs.FileInfo
 	files, err = ioutil.ReadDir(path)
 	for _, f := range files {
 		if count > target {

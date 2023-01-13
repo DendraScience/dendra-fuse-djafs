@@ -49,6 +49,9 @@ func ZipInside(path string, dest string, filesOnly bool) error {
 
 		}
 	} else {
+		// TODO there's a bug somewhere here, not sure where.
+		// I think we need to check to make sure we aren't including files at the
+		// current level, and only get stuff in subdirs
 		filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
 			if d.Name() == outpath {
 				return nil
