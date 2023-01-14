@@ -86,7 +86,7 @@ There are four notable pools of data which are relevant to djafs.
    pack and unpack.
    As the data itself is all zip files, no external software besides the
    coreutils should be required to manually intervene if necessary.
-1. Metadata.
+1. Lookup data.
    When data is added to the archive, if the timestamp is used as the filename,
    it may overwrite previous content, which makes snapshots impossible.
    Instead, added files are hashed using SHA-256, and stored as `<HASH>.<ext>`.
@@ -100,12 +100,13 @@ There are four notable pools of data which are relevant to djafs.
    would result in data loss.
    Instead, a tradeoff will be made, and the inode / dirent model is followed:
    there is no global metadata file, instead, each gzip file contains its
-   own metadata file.
-   The metadata file will be JSON, and get compressed alongside the data,
-   into a file named `metadata.json`.
-   The metadata recorded will contain a lookup from the timestamp filenames
+   own lookup table file.
+   The lookup table file will be JSON, and get compressed alongside the data,
+   into a file named `inode.djfl` (since it roughly corresponds to some of the
+   responsibilitied an inode would have).
+   The lookup records will contain a list of pairings from the filenames
    that should exist for a directory of data to the backing hashed files.
-   The metadata records will be arranged as an array of objects, containing
+   The lookup records will be arranged as an array of objects, containing
    the filename, target, and modification date (as a unix timestamp)
    for the record.
    To parse the file properly, the array of data will be read in from
@@ -151,9 +152,9 @@ There are four notable pools of data which are relevant to djafs.
 
 ### Filesystem Structure
 
-Compressed files use the extension `.djfz`
-Manifest (lookup table) files will use the extension `.djfl`
-Metadata files will use the extension `.djfm`
+Compressed files use the extension `.djfz` (zip files)
+Lookup files will use the extension `.djfl` (json files)
+Metadata files will use the extension `.djfm` (json files)
 
 Uncompressed metadata files will contain the following data for quick summary/metrics calculations:
  - Version of djfs used to pack the archive (useful for migrations)
