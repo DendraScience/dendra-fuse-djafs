@@ -2,11 +2,39 @@ package util
 
 import (
 	"archive/zip"
+	"bufio"
+	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 )
+
+var ErrNotDJFZExtension error
+
+func init() {
+	ErrNotDJFZExtension = errors.New("file path extension is not '.djfz'")
+}
+
+func ExtractLookup(path string) (LookupTable, error) {
+	if filepath.Ext(path) != "djfz" {
+		return LookupTable{}, ErrNotDJFZExtension
+	}
+	zrc, err := zip.OpenReader(path)
+	if err != nil {
+		return LookupTable{}, err
+	}
+	f, err := zrc.Open("lookup.djfl")
+	if err != nil {
+		return LookupTable{}, err
+	}
+	x := bufio.NewReader(f)
+	jd := json.NewDecoder(x)
+	lt := LookupTable{}
+	err = jd.Decode(&lt)
+	return lt, err
+}
 
 func ZipInside(path string, dest string, filesOnly bool) error {
 	filename := "subdirs.djfz"
@@ -46,7 +74,7 @@ func ZipInside(path string, dest string, filesOnly bool) error {
 			defer f.Close()
 			writer, err := w.Create(filepath.Join(path, v.Name()))
 			if err != nil {
-				// TODO handle this error
+				return err
 			}
 			io.Copy(writer, f)
 

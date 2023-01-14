@@ -49,6 +49,11 @@ func CountSubfile(path string, target int) (count int, overage bool, err error) 
 	return
 }
 
+// given a path and a maximum number of files per zip
+// this function tells you the path locations where you should
+// recursively zip and where to zip all relative files to build
+// out an initial directory
+// It does not take into account existing djfz archive files.
 func DetermineZipBoundaries(path string, target int) (subfolderRoots []string, subfileRoots []string, err error) {
 	_, over, err := CountSubfile(path, target)
 	if err != nil {
