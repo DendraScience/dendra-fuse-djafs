@@ -39,8 +39,8 @@ type LookupEntry struct {
 	FileSize int64     `json:"size"`
 }
 
-// GetOldest returns the first modification entry, taking for granted
-// that the Entries slice is sorted.
+// GetOldest returns the first modification entry, assuming
+// the Entries slice is sorted.
 // TODO ensure the entries are sorted during garbage collection
 func (l LookupTable) GetOldestFileTS() time.Time {
 	if len(l.Entries) == 0 {
@@ -120,7 +120,7 @@ func GetFileHash(path string) (hash string, err error) {
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 	defer file.Close()
 	h := sha256.New()

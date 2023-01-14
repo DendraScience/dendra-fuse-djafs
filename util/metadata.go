@@ -6,13 +6,13 @@ import (
 )
 
 type Metadata struct {
-	CompressedSize   int
-	DJFSVersion      string
-	NewestFileTS     time.Time
-	OldestFileTS     time.Time
-	TargetFileCount  int
-	TotalFileCount   int
-	UncompressedSize int
+	CompressedSize   int       `json:"compressed_size"`
+	DJFSVersion      string    `json:"djfs_version"`
+	NewestFileTS     time.Time `json:"newest_file_ts"`
+	OldestFileTS     time.Time `json:"oldest_file_ts"`
+	TargetFileCount  int       `json:"target_file_count"`
+	TotalFileCount   int       `json:"total_file_count"`
+	UncompressedSize int       `json:"uncompressed_size"`
 }
 
 func GetVersion() string {
