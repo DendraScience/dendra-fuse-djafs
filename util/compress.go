@@ -45,6 +45,9 @@ func ZipInside(path string, dest string, filesOnly bool) error {
 			}
 			defer f.Close()
 			writer, err := w.Create(filepath.Join(path, v.Name()))
+			if err != nil {
+				// TODO handle this error
+			}
 			io.Copy(writer, f)
 
 		}

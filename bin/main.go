@@ -13,7 +13,7 @@ func main() {
 	}
 	_ = files
 	for _, f := range files {
-		err := util.ZipInside(f, "", false)
+		err = util.ZipInside(f, "", false)
 		if err != nil {
 			panic(err)
 		}
