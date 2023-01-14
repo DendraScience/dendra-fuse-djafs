@@ -1,7 +1,10 @@
 package util
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -40,4 +43,32 @@ func (l LookupTable) GenerateMetadata(path string) (Metadata, error) {
 	m.TotalFileCount = l.GetTotalFileCount()
 	m.UncompressedSize = l.GetUncompressedSize()
 	return m, nil
+}
+
+func (m Metadata) Save(path string) error {
+	if !strings.HasSuffix(path, "djfm") {
+		path = filepath.Join(path, "metadata.djfm")
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	je := json.NewEncoder(f)
+	err = je.Encode(m)
+	return err
+}
+
+func (l LookupTable) Save(path string) error {
+	if !strings.HasSuffix(path, "djfl") {
+		path = filepath.Join(path, "lookup.djfl")
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	je := json.NewEncoder(f)
+	err = je.Encode(l)
+	return err
 }
