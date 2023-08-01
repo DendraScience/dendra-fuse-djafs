@@ -2,8 +2,6 @@ package util
 
 import (
 	"errors"
-	"io/fs"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 )
@@ -25,8 +23,8 @@ func CountSubfile(path string, target int) (count int, overage bool, err error) 
 		err = ErrExpectedDirectory
 		return
 	}
-	var files []fs.FileInfo
-	files, err = ioutil.ReadDir(path)
+	var files []os.DirEntry
+	files, err = os.ReadDir(path)
 	for _, f := range files {
 		if count > target {
 			return count, true, nil
@@ -62,7 +60,7 @@ func DetermineZipBoundaries(path string, target int) (subfolderRoots []string, s
 	if !over {
 		return []string{path}, []string{}, nil
 	}
-	files, err := ioutil.ReadDir(path)
+	files, err := os.ReadDir(path)
 	hasFiles := false
 	for _, f := range files {
 		if !f.IsDir() {
