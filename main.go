@@ -74,6 +74,7 @@ func main() {
 	go func() {
 		<-sigChan
 		// here, close out the backing files and stop all garbage collection routines
+		fuse.Unmount(mountpoint)
 		c.Close()
 		os.Exit(1)
 	}()
