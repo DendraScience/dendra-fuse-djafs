@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strings"
 
 	"bazil.org/fuse"
@@ -67,6 +68,15 @@ func main() {
 		log.Fatal(err)
 	}
 	defer c.Close()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+	go func() {
+		<-sigChan
+		// here, close out the backing files and stop all garbage collection routines
+		c.Close()
+		os.Exit(1)
+	}()
 
 	err = fs.Serve(c, archivefs.NewFS())
 	if err != nil {
