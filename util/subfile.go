@@ -6,11 +6,7 @@ import (
 	"path/filepath"
 )
 
-var ErrExpectedDirectory error
-
-func init() {
-	ErrExpectedDirectory = errors.New("expected directory but got file")
-}
+var ErrExpectedDirectory = errors.New("expected directory but got file")
 
 func CountSubfile(path string, target int) (count int, overage bool, err error) {
 	var info os.FileInfo
@@ -19,12 +15,14 @@ func CountSubfile(path string, target int) (count int, overage bool, err error) 
 		return
 	}
 	if !info.IsDir() {
-		// TODO extract error into global variable
 		err = ErrExpectedDirectory
 		return
 	}
 	var files []os.DirEntry
 	files, err = os.ReadDir(path)
+	if err != nil {
+		return
+	}
 	for _, f := range files {
 		if count > target {
 			return count, true, nil

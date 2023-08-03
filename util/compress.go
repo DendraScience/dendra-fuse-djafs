@@ -17,7 +17,8 @@ func init() {
 	ErrNotDJFZExtension = errors.New("file path extension is not '.djfz'")
 }
 
-func ExtractLookup(path string) (LookupTable, error) {
+// assumes that the path is the name of a djfz file
+func ExtractLookupFromDJFZ(path string) (LookupTable, error) {
 	if filepath.Ext(path) != "djfz" {
 		return LookupTable{}, ErrNotDJFZExtension
 	}
@@ -36,7 +37,7 @@ func ExtractLookup(path string) (LookupTable, error) {
 	return lt, err
 }
 
-func ZipInside(path string, dest string, filesOnly bool) error {
+func ZipInside(path string, _ string, filesOnly bool) error {
 	filename := "subdirs.djfz"
 	if filesOnly {
 		filename = "files.djfz"
@@ -83,7 +84,7 @@ func ZipInside(path string, dest string, filesOnly bool) error {
 		// TODO there's a bug somewhere here, not sure where.
 		// I think we need to check to make sure we aren't including files at the
 		// current level, and only get stuff in subdirs
-		filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
+		filepath.WalkDir(path, func(path string, d fs.DirEntry, _ error) error {
 			if d.Name() == outpath {
 				return nil
 			}

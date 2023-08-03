@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -63,7 +62,7 @@ func CreateLookupEntry(path string) (LookupEntry, error) {
 	if err != nil {
 		return l, err
 	}
-	fullName = filepath.Join(fullName, hash, GetFileDotExtension(path))
+	fullName = filepath.Join(fullName, hash, filepath.Ext(path))
 	l.Name = fullName
 	l.Target = path
 	l.Modified = info.ModTime()
@@ -128,14 +127,6 @@ func GetFileHash(path string) (hash string, err error) {
 		return "", err
 	}
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
-}
-
-func GetFileDotExtension(path string) string {
-	split := strings.Split(path, ".")
-	if len(split) == 0 {
-		return ""
-	}
-	return "." + split[len(split)-1]
 }
 
 // TODO add LookupTableCollapse function for combining consecutive entries
