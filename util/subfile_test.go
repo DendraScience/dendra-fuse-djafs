@@ -7,6 +7,7 @@ import (
 	"testing"
 )
 
+// TODO add tests for the following function
 func TestDetermineZipBoundaries(t *testing.T) {
 	t.Run("Triple nested subfolders without higher files", func(t *testing.T) {
 		dir := t.TempDir()
