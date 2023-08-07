@@ -2,6 +2,9 @@ package main
 
 import (
 	"flag"
+	"os"
+
+	"github.com/dendrascience/dendra-archive-fuse/util"
 )
 
 // This utility allows the user to convert a directory tree
@@ -36,4 +39,23 @@ func main() {
 	if *outputPath == "" || *directoryPath == "" {
 		flag.CommandLine.Usage()
 	}
+	// Create the filesystem.
+	// The filesystem is created at the output path.
+	os.MkdirAll(*outputPath, 0o777)
+	subfolders, subfiles, err := util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
+	if err != nil {
+		panic(err)
+	}
+	_, _ = subfolders, subfiles
+	// for each file under the subfiles path,
+	// hash the file and create an entry in the metadata file.
+	// then, zip all the files in the subfiles path into a .djfz (zip) file.
+
+	// for each folder under the subfolders path,
+	// hash all the files in the folder and create an entry in the metadata file.
+	// for empty folders, create an entry in the metadata file pointing to that folder
+	// then, zip all the files in the subfolders path into a .djfz (zip) file.
+
+	// for all the .djfz files in the subfolders and subfiles path,
+	// record the metrics into the djfl file. for api entries later
 }
