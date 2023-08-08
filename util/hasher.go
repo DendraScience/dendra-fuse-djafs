@@ -2,6 +2,7 @@ package util
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -32,10 +33,11 @@ func (e EntrySet) Less(i, j int) bool {
 }
 
 type LookupEntry struct {
+	FileSize int64     `json:"size"`
+	Inode    uint64    `json:"inode"`
+	Modified time.Time `json:"modified"`
 	Name     string    `json:"name"`
 	Target   string    `json:"target"`
-	Modified time.Time `json:"modified"`
-	FileSize int64     `json:"size"`
 }
 
 // GetOldest returns the first modification entry, assuming
@@ -57,17 +59,62 @@ func CreateLookupEntry(path string) (LookupEntry, error) {
 	if info.IsDir() {
 		return l, ErrExpectedFile
 	}
-	fullName := filepath.Dir(path)
-	hash, err := GetFileHash(path)
-	if err != nil {
-		return l, err
-	}
-	fullName = filepath.Join(fullName, hash, filepath.Ext(path))
-	l.Name = fullName
+	newPath, err := RenameHashedFile(path)
+	l.Name = newPath
 	l.Target = path
 	l.Modified = info.ModTime()
 	l.FileSize = info.Size()
-	return l, nil
+	return l, err
+}
+
+func RenameHashedFile(path string) (string, error) {
+	hash, err := GetFileHash(path)
+	if err != nil {
+		return "", err
+	}
+
+	fullName := filepath.Dir(path)
+	fullName = filepath.Join(fullName, hash+filepath.Ext(path))
+	return fullName, os.Rename(path, fullName)
+}
+
+func CreateDJAFSArchive(path string) error {
+	lt := LookupTable{sorted: false, Entries: EntrySet{}}
+	err := filepath.WalkDir(path, func(path string, info os.DirEntry, err error) error {
+		le, err := CreateLookupEntry(path)
+		if err != nil {
+			return err
+		}
+		lt.Entries = append(lt.Entries, le)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	sort.Sort(lt.Entries)
+	manifest := filepath.Join(path, "manifest.djfl")
+	err = WriteJSONFile(manifest, lt)
+	if err != nil {
+		return err
+	}
+	err = ZipInside(path, false)
+	if err != nil {
+		return err
+	}
+	for _, e := range lt.Entries {
+		os.Remove(e.Name)
+	}
+	return nil
+	// TODO
+}
+
+func WriteJSONFile(path string, v interface{}) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewEncoder(f).Encode(v)
 }
 
 // Does the opposite of GetOldestFileTS

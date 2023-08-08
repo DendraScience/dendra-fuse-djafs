@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 
 	"github.com/dendrascience/dendra-archive-fuse/util"
@@ -46,7 +47,16 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	fmt.Printf("subfolders: %v\nsubfiles: %v\n", subfolders, subfiles)
 	_, _ = subfolders, subfiles
+
+	for _, dir := range subfolders {
+		err := util.CreateDJAFSArchive(dir)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	// for each file under the subfiles path,
 	// hash the file and create an entry in the metadata file.
 	// then, zip all the files in the subfiles path into a .djfz (zip) file.

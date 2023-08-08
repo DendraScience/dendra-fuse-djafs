@@ -37,7 +37,7 @@ func ExtractLookupFromDJFZ(path string) (LookupTable, error) {
 	return lt, err
 }
 
-func ZipInside(path string, _ string, filesOnly bool) error {
+func ZipInside(path string, filesOnly bool) error {
 	filename := "subdirs.djfz"
 	if filesOnly {
 		filename = "files.djfz"
@@ -68,12 +68,12 @@ func ZipInside(path string, _ string, filesOnly bool) error {
 			if v.IsDir() {
 				continue
 			}
-			f, err := os.Open(filepath.Join(path, v.Name()))
+			f, err := os.Open(path)
 			if err != nil {
 				return err
 			}
 			defer f.Close()
-			writer, err := w.Create(filepath.Join(path, v.Name()))
+			writer, err := w.Create(path)
 			if err != nil {
 				return err
 			}
@@ -84,7 +84,7 @@ func ZipInside(path string, _ string, filesOnly bool) error {
 		// TODO there's a bug somewhere here, not sure where.
 		// I think we need to check to make sure we aren't including files at the
 		// current level, and only get stuff in subdirs
-		filepath.WalkDir(path, func(path string, d fs.DirEntry, _ error) error {
+		err = filepath.WalkDir(path, func(path string, d fs.DirEntry, _ error) error {
 			if d.Name() == outpath {
 				return nil
 			}
@@ -92,18 +92,18 @@ func ZipInside(path string, _ string, filesOnly bool) error {
 				w.Create(filepath.Join(path, d.Name()) + "/")
 				return nil
 			}
-			f, err := os.Open(filepath.Join(path, d.Name()))
-			if err != nil {
-				return err
+			f, openErr := os.Open(path)
+			if openErr != nil {
+				return openErr
 			}
 			defer f.Close()
-			writer, err := w.Create(filepath.Join(path, d.Name()))
-			if err != nil {
-				return err
+			writer, createErr := w.Create(path)
+			if createErr != nil {
+				return createErr
 			}
 			io.Copy(writer, f)
 			return nil
 		})
 	}
-	return nil
+	return err
 }
