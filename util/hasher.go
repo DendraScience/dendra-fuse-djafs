@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -80,8 +81,11 @@ func RenameHashedFile(path string) (string, error) {
 
 func CreateDJAFSArchive(path string) error {
 	lt := LookupTable{sorted: false, Entries: EntrySet{}}
-	err := filepath.WalkDir(path, func(path string, info os.DirEntry, err error) error {
-		le, err := CreateLookupEntry(path)
+	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
+		if subpath == path {
+			return nil
+		}
+		le, err := CreateLookupEntry(subpath)
 		if err != nil {
 			return err
 		}
@@ -102,7 +106,10 @@ func CreateDJAFSArchive(path string) error {
 		return err
 	}
 	for _, e := range lt.Entries {
-		os.Remove(e.Name)
+		err = os.Remove(e.Name)
+		if err != nil {
+			log.Printf("Failed to remove %s: %s", e.Name, err)
+		}
 	}
 	return nil
 	// TODO
