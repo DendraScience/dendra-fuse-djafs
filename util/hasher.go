@@ -3,6 +3,7 @@ package util
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -12,7 +13,10 @@ import (
 	"time"
 )
 
-var ErrExpectedFile error
+var (
+	ErrExpectedFile      = fmt.Errorf("expected file, got directory")
+	ErrUnexpectedSymlink = fmt.Errorf("expected file, got symlink")
+)
 
 type LookupTable struct {
 	Entries EntrySet `json:"entries"`
@@ -53,7 +57,15 @@ func (l LookupTable) GetOldestFileTS() time.Time {
 
 func CreateLookupEntry(path string) (LookupEntry, error) {
 	var l LookupEntry
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return l, err
+	}
+	// if the file is a symlink, skip it
+	if info.Mode()&os.ModeSymlink == os.ModeSymlink {
+		fmt.Printf("skippping unsupported symlink %s\n", path)
+		return l, errors.Join(ErrUnexpectedSymlink, fmt.Errorf("skippping unsupported symlink %s", path))
+	}
 	if err != nil {
 		return l, err
 	}
@@ -79,16 +91,32 @@ func RenameHashedFile(path string) (string, error) {
 	return fullName, os.Rename(path, fullName)
 }
 
-func CreateDJAFSArchive(path string) error {
+func CreateDJAFSArchive(path string, filesOnly bool) error {
 	lt := LookupTable{sorted: false, Entries: EntrySet{}}
 	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
+		if filesOnly {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+		}
 		if subpath == path {
 			return nil
 		}
 		le, err := CreateLookupEntry(subpath)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if errors.Is(err, ErrExpectedFile) {
+			return nil
+		}
+		if errors.Is(err, ErrUnexpectedSymlink) {
+			os.Remove(subpath)
+			return nil
+		}
 		if err != nil {
 			return err
 		}
+
 		lt.Entries = append(lt.Entries, le)
 		return nil
 	})
@@ -101,7 +129,7 @@ func CreateDJAFSArchive(path string) error {
 	if err != nil {
 		return err
 	}
-	err = ZipInside(path, false)
+	err = ZipInside(path, filesOnly)
 	if err != nil {
 		return err
 	}

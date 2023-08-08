@@ -51,7 +51,13 @@ func main() {
 	_, _ = subfolders, subfiles
 
 	for _, dir := range subfolders {
-		err := util.CreateDJAFSArchive(dir)
+		err := util.CreateDJAFSArchive(dir, false)
+		if err != nil {
+			panic(err)
+		}
+	}
+	for _, dir := range subfiles {
+		err := util.CreateDJAFSArchive(dir, true)
 		if err != nil {
 			panic(err)
 		}

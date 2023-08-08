@@ -62,6 +62,10 @@ func ZipInside(path string, filesOnly bool) error {
 			return err
 		}
 		for _, v := range fileSet {
+			suffix := filepath.Ext(v.Name())
+			if suffix == "djfz" || suffix == "djfl" {
+				continue
+			}
 			if v.Name() == outpath {
 				continue
 			}
@@ -85,7 +89,8 @@ func ZipInside(path string, filesOnly bool) error {
 		// I think we need to check to make sure we aren't including files at the
 		// current level, and only get stuff in subdirs
 		err = filepath.WalkDir(path, func(path string, d fs.DirEntry, _ error) error {
-			if d.Name() == filename {
+			suffix := filepath.Ext(d.Name())
+			if suffix == ".djfz" || suffix == ".djfl" {
 				return nil
 			}
 			if d.IsDir() {
