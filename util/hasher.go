@@ -207,7 +207,7 @@ func HashFromHashPath(path string) (string, error) {
 	return parts[2], nil
 }
 
-func HashPathFromHash(hash, datapath, workspace string) string {
+func HashPathFromHash(hash string) string {
 	hInt := colorhash.HashString(hash)
 	hInt = hInt % 1000
 	first := hInt
@@ -219,7 +219,7 @@ func HashPathFromHash(hash, datapath, workspace string) string {
 
 func WorkspacePrefixFromHashPath(path string) (string, error) {
 	parts := strings.Split(path, "-")
-	if len(parts) != 3 {
+	if len(parts) < 3 {
 		return "", ErrInvalidHashPath
 	}
 	return filepath.Join(parts[0], parts[1]), nil
@@ -227,7 +227,7 @@ func WorkspacePrefixFromHashPath(path string) (string, error) {
 
 func ZipPrefixFromHashPath(path string) (string, error) {
 	parts := strings.Split(path, "-")
-	if len(parts) != 3 {
+	if len(parts) < 3 {
 		return "", ErrInvalidHashPath
 	}
 	return parts[0] + "-" + parts[1], nil

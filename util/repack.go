@@ -38,9 +38,10 @@ func CopyToWorkDir(path string) error {
 	if err != nil {
 		return err
 	}
-	newPath := HashPathFromHash(hash, "", "") + filepath.Ext(path)
+	newPath := HashPathFromHash(hash) + filepath.Ext(path)
 	workspacePrefix, err := WorkspacePrefixFromHashPath(newPath)
 	workspacePrefix = filepath.Join(WorkDir, workspacePrefix)
+	fmt.Printf("workspacePrefix: %v\n", workspacePrefix)
 	if err != nil {
 		return err
 	}
@@ -50,7 +51,8 @@ func CopyToWorkDir(path string) error {
 	}
 	// copy file to work dir
 	newFile, err := os.Create(filepath.Join(workspacePrefix, newPath))
-	if err != nil {
+	if errors.Is(err, os.ErrExist) {
+	} else if err != nil {
 		return err
 	}
 	defer newFile.Close()
