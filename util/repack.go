@@ -37,7 +37,7 @@ func CopyToWorkDir(path string) error {
 		return err
 	}
 	// copy file to work dir
-	newFile, err := os.Create(newPath)
+	newFile, err := os.Create(filepath.Join(workspacePrefix, newPath))
 	if err != nil {
 		return err
 	}
