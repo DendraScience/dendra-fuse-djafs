@@ -10,12 +10,16 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
+
+	"github.com/taigrr/colorhash"
 )
 
 var (
 	ErrExpectedFile      = fmt.Errorf("expected file, got directory")
 	ErrUnexpectedSymlink = fmt.Errorf("expected file, got symlink")
+	ErrInvalidHashPath   = fmt.Errorf("invalid hash path")
 )
 
 type LookupTable struct {
@@ -189,6 +193,44 @@ func (l LookupTable) GetUncompressedSize() int {
 		total += int(e.FileSize)
 	}
 	return total
+}
+
+func ManifestLocationForPath(path string) (string, error) {
+	return "", nil
+}
+
+func HashFromHashPath(path string) (string, error) {
+	parts := strings.Split(path, "-")
+	if len(parts) != 3 {
+		return "", ErrInvalidHashPath
+	}
+	return parts[2], nil
+}
+
+func HashPathFromHash(hash, datapath, workspace string) string {
+	hInt := colorhash.HashString(hash)
+	hInt = hInt % 1000
+	first := hInt
+	second := "00000"
+	third := hash
+	// TODO check if directory is getting too big and split
+	return fmt.Sprintf("%d-%s-%s", first, second, third)
+}
+
+func WorkspacePrefixFromHashPath(path string) (string, error) {
+	parts := strings.Split(path, "-")
+	if len(parts) != 3 {
+		return "", ErrInvalidHashPath
+	}
+	return filepath.Join(parts[0], parts[1]), nil
+}
+
+func ZipPrefixFromHashPath(path string) (string, error) {
+	parts := strings.Split(path, "-")
+	if len(parts) != 3 {
+		return "", ErrInvalidHashPath
+	}
+	return parts[0] + "-" + parts[1], nil
 }
 
 func GetFileHash(path string) (hash string, err error) {

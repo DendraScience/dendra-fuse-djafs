@@ -9,10 +9,7 @@ import (
 	"strings"
 
 	"bazil.org/fuse"
-	"bazil.org/fuse/fs"
 	_ "bazil.org/fuse/fs/fstestutil"
-
-	archivefs "github.com/dendrascience/dendra-archive-fuse/fs"
 )
 
 const (
@@ -79,10 +76,11 @@ func main() {
 		os.Exit(1)
 	}()
 
-	err = fs.Serve(c, archivefs.NewFS())
-	if err != nil {
-		log.Fatal(err)
-	}
+	// err = fs.Serve(c, archivefs.NewFS())
+	//
+	//	if err != nil {
+	//		log.Fatal(err)
+	//	}
 }
 
 func help() {

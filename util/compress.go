@@ -37,6 +37,64 @@ func ExtractLookupFromDJFZ(path string) (LookupTable, error) {
 	return lt, err
 }
 
+func CountFilesInDJFZ(path string) (int, error) {
+	zrc, err := zip.OpenReader(path)
+	if err != nil {
+		return 0, err
+	}
+	defer zrc.Close()
+	return len(zrc.File), nil
+}
+
+func CompressHashed(path string, dest string) error {
+	filename := dest
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return ErrExpectedDirectory
+	}
+	outpath := filepath.Join(path, filename)
+	file, err := os.Create(outpath)
+	if err != nil {
+		return err
+	}
+	w := zip.NewWriter(file)
+	defer w.Close()
+	fileSet, err := os.ReadDir(path)
+	if err != nil {
+		return err
+	}
+	for _, v := range fileSet {
+		suffix := filepath.Ext(v.Name())
+		if suffix == "djfz" || suffix == "djfl" {
+			continue
+		}
+		if v.Name() == outpath {
+			continue
+		}
+		if v.IsDir() {
+			continue
+		}
+		f, openErr := os.Open(path)
+		if openErr != nil {
+			return openErr
+		}
+		defer f.Close()
+		writer, createErr := w.Create(v.Name())
+		if createErr != nil {
+			return createErr
+		}
+		_, copyErr := io.Copy(writer, f)
+		if copyErr != nil {
+			return copyErr
+		}
+	}
+
+	return err
+}
+
 func ZipInside(path string, filesOnly bool) error {
 	filename := "subdirs.djfz"
 	if filesOnly {
