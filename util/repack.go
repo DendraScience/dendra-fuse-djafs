@@ -1,15 +1,20 @@
 package util
 
 import (
+	"archive/zip"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
 var (
 	gcLock  sync.Mutex
 	WorkDir = ".work"
+	DataDir = ".data"
 )
 
 func CopyToWorkDir(path string) error {
@@ -30,8 +35,15 @@ func CopyToWorkDir(path string) error {
 	defer gcLock.Unlock()
 	// create work dir
 	hash, err := GetFileHash(path)
+	if err != nil {
+		return err
+	}
 	newPath := HashPathFromHash(hash, "", "") + filepath.Ext(path)
 	workspacePrefix, err := WorkspacePrefixFromHashPath(newPath)
+	workspacePrefix = filepath.Join(WorkDir, workspacePrefix)
+	if err != nil {
+		return err
+	}
 	err = os.MkdirAll(workspacePrefix, 0o755)
 	if err != nil {
 		return err
@@ -44,4 +56,92 @@ func CopyToWorkDir(path string) error {
 	defer newFile.Close()
 	_, err = io.Copy(newFile, file)
 	return err
+}
+
+func ListWorkDirs() ([]string, error) {
+	topLevel, err := filepath.Glob(filepath.Join(WorkDir, "*"))
+	if err != nil {
+		return nil, err
+	}
+	var workDirs []string
+	for _, dir := range topLevel {
+		children, err := filepath.Glob(filepath.Join(dir, "*"))
+		if err != nil {
+			return nil, err
+		}
+		workDirs = append(workDirs, children...)
+	}
+	return workDirs, nil
+}
+
+func WorkDirPathToZipPath(workDir string) string {
+	workDir = filepath.Clean(workDir)
+	wd := strings.TrimPrefix(workDir, WorkDir)
+	wd = strings.TrimPrefix(wd, "/")
+	wd = strings.ReplaceAll(wd, "/", "-")
+	return filepath.Join(DataDir, wd+".djfz")
+}
+
+func GCWorkDirs() error {
+	gcLock.Lock()
+	defer gcLock.Unlock()
+	workDirs, err := ListWorkDirs()
+	if err != nil {
+		return err
+	}
+	if _, statErr := os.Stat(DataDir); statErr != nil {
+		os.MkdirAll(DataDir, 0o755)
+	}
+	for _, workDir := range workDirs {
+		err := PackWorkDir(workDir)
+		if err != nil {
+			return err
+		}
+		err = os.RemoveAll(workDir)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func PackWorkDir(workDir string) error {
+	fmt.Println("workDir: ", workDir)
+	zipPath := WorkDirPathToZipPath(workDir)
+	fmt.Println("zipPath: ", zipPath)
+	// before pack, check if zip file exists
+	// and merge
+
+	_, err := os.Stat(zipPath)
+	if err == nil {
+		rc, err := zip.OpenReader(zipPath)
+		if err != nil {
+			return err
+		}
+		defer rc.Close()
+		// extract all files from the zip into
+		// the work dir
+		for _, f := range rc.File {
+			fpath := filepath.Join(workDir, f.Name)
+			newFile, err := os.Create(fpath)
+			if err != nil {
+				if errors.Is(err, os.ErrExist) {
+					continue
+				}
+				return err
+			}
+			defer newFile.Close()
+			cFile, err := f.Open()
+			if err != nil {
+				return err
+			}
+			defer cFile.Close()
+			_, err = io.Copy(newFile, cFile)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	fmt.Println("compressing work dir: ", workDir, " to zip: ", zipPath)
+	return CompressHashed(workDir, zipPath)
 }

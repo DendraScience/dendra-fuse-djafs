@@ -7,4 +7,7 @@ func TestRepack(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
+	t.Error(GCWorkDirs())
+	t.Fail()
 }

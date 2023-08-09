@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -47,7 +48,6 @@ func CountFilesInDJFZ(path string) (int, error) {
 }
 
 func CompressHashed(path string, dest string) error {
-	filename := dest
 	info, err := os.Stat(path)
 	if err != nil {
 		return err
@@ -55,8 +55,8 @@ func CompressHashed(path string, dest string) error {
 	if !info.IsDir() {
 		return ErrExpectedDirectory
 	}
-	outpath := filepath.Join(path, filename)
-	file, err := os.Create(outpath)
+	os.Remove(dest)
+	file, err := os.Create(dest)
 	if err != nil {
 		return err
 	}
@@ -67,17 +67,11 @@ func CompressHashed(path string, dest string) error {
 		return err
 	}
 	for _, v := range fileSet {
-		suffix := filepath.Ext(v.Name())
-		if suffix == "djfz" || suffix == "djfl" {
-			continue
-		}
-		if v.Name() == outpath {
-			continue
-		}
 		if v.IsDir() {
 			continue
 		}
-		f, openErr := os.Open(path)
+		fmt.Println("compressing: ", filepath.Join(path, v.Name()))
+		f, openErr := os.Open(filepath.Join(path, v.Name()))
 		if openErr != nil {
 			return openErr
 		}
