@@ -95,6 +95,59 @@ func RenameHashedFile(path string) (string, error) {
 	return fullName, os.Rename(path, fullName)
 }
 
+func CreateDJAFSManifest(path string, filesOnly bool) error {
+	lt := LookupTable{sorted: false, Entries: EntrySet{}}
+	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
+		if filesOnly {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+		}
+		if subpath == path {
+			return nil
+		}
+		le, err := CreateLookupEntry(subpath)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if errors.Is(err, ErrExpectedFile) {
+			return nil
+		}
+		if errors.Is(err, ErrUnexpectedSymlink) {
+			log.Printf("Removing symlink %s", subpath)
+			os.Remove(subpath)
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		lt.Entries = append(lt.Entries, le)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	sort.Sort(lt.Entries)
+	manifest := filepath.Join(path, "manifest.djfl")
+	err = WriteJSONFile(manifest, lt)
+	if err != nil {
+		return err
+	}
+	err = ZipInside(path, filesOnly)
+	if err != nil {
+		return err
+	}
+	for _, e := range lt.Entries {
+		err = os.Remove(e.Name)
+		if err != nil {
+			log.Printf("Failed to remove %s: %s", e.Name, err)
+		}
+	}
+	return nil
+	// TODO
+}
+
 func CreateDJAFSArchive(path string, filesOnly bool) error {
 	lt := LookupTable{sorted: false, Entries: EntrySet{}}
 	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {

@@ -16,19 +16,21 @@ import (
 // The binary takes in a directory path, the threshold size,
 // the threshold tolerance, and the output path as arguments.
 // The output path is where the filesystem will be created.
-// The threshold size is the maximum number of files that can
-// be stored in a zipped directory before it is split into subdirectories.
-// The threshold tolerance is the additional number of files that
-// can be stored in a zipped directory past the threshold before
-// it is split into subdirectories.
-// is allowed to be exceeded before the directory is split.
-// The threshold tolerance is an integer
-// The threshold size is an integer greater than 0.
-// The directory path is a string.
-// The output path is a string.
 // The directory path must be a directory that exists.
 // The directory path must be a valid directory path.
 // The output path must be a valid directory path.
+
+// New files are dropped into a hot cache folder.
+// These files are given a temporary name, which corresponds to an inode number.
+// There is one, global hot cache manifest file, which contains the mapping
+// between the inode number and the original file name (and path).
+//
+// When the garbage collector is run, it will read the hot cache manifest file
+// and hash the files in the hot cache folder, copying them to the work folder.
+// When files are hashed into the work folder, their manifest entry is updated
+// in the .mappings folder, which is a stratified directory structure.
+//
+// All actual files are stored in the .data folder, which is flat.
 
 var (
 	outputPath         = flag.String("o", "", "The output path for the filesystem.")
@@ -51,6 +53,9 @@ func main() {
 	}
 	fmt.Printf("subfolders: %v\nsubfiles: %v\n", subfolders, subfiles)
 	_, _ = subfolders, subfiles
+	for _, sf := range subfolders {
+		util.CreateDJAFSManifest(sf, true)
+	}
 	err = filepath.WalkDir(*directoryPath, func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
 			return nil
@@ -60,7 +65,8 @@ func main() {
 			return nil
 		}
 		fmt.Printf("path: %v\n", path)
-		return util.CopyToWorkDir(path)
+		_, err = util.CopyToWorkDir(path)
+		return err
 	})
 	if err != nil {
 		panic(err)

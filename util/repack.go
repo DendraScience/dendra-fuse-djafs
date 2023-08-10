@@ -17,17 +17,17 @@ var (
 	DataDir = ".data"
 )
 
-func CopyToWorkDir(path string) error {
+func CopyToWorkDir(path string) (string, error) {
 	stat, err := os.Stat(path)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if stat.IsDir() {
-		return ErrExpectedFile
+		return "", ErrExpectedFile
 	}
 	file, err := os.Open(path)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer file.Close()
 	// create work dir
@@ -36,28 +36,28 @@ func CopyToWorkDir(path string) error {
 	// create work dir
 	hash, err := GetFileHash(path)
 	if err != nil {
-		return err
+		return "", err
 	}
-	newPath := HashPathFromHash(hash) + filepath.Ext(path)
-	workspacePrefix, err := WorkspacePrefixFromHashPath(newPath)
+	newName := HashPathFromHash(hash) + filepath.Ext(path)
+	workspacePrefix, err := WorkspacePrefixFromHashPath(newName)
 	workspacePrefix = filepath.Join(WorkDir, workspacePrefix)
 	fmt.Printf("workspacePrefix: %v\n", workspacePrefix)
 	if err != nil {
-		return err
+		return "", err
 	}
 	err = os.MkdirAll(workspacePrefix, 0o755)
 	if err != nil {
-		return err
+		return "", err
 	}
 	// copy file to work dir
-	newFile, err := os.Create(filepath.Join(workspacePrefix, newPath))
+	newFile, err := os.Create(filepath.Join(workspacePrefix, newName))
 	if errors.Is(err, os.ErrExist) {
 	} else if err != nil {
-		return err
+		return "", err
 	}
 	defer newFile.Close()
 	_, err = io.Copy(newFile, file)
-	return err
+	return newName, err
 }
 
 func ListWorkDirs() ([]string, error) {
