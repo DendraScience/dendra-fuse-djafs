@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dendrascience/dendra-archive-fuse/util"
 )
@@ -59,7 +60,13 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		err = util.WriteJSONFile(filepath.Join(sf, "subfirs.djfl"), lt)
+		subpath := strings.TrimPrefix(sf, *directoryPath)
+		newPath := filepath.Join(*outputPath, subpath)
+		err = os.MkdirAll(newPath, 0o777)
+		if err != nil {
+			panic(err)
+		}
+		err = util.WriteJSONFile(filepath.Join(newPath, "subdirs.djfl"), lt)
 		if err != nil {
 			panic(err)
 		}
@@ -70,7 +77,13 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		err = util.WriteJSONFile(filepath.Join(sf, "subfiles.djfl"), lt)
+		subpath := strings.TrimPrefix(sf, *directoryPath)
+		newPath := filepath.Join(*outputPath, subpath)
+		err = os.MkdirAll(newPath, 0o777)
+		if err != nil {
+			panic(err)
+		}
+		err = util.WriteJSONFile(filepath.Join(newPath, "subfiles.djfl"), lt)
 		if err != nil {
 			panic(err)
 		}
