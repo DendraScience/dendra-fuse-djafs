@@ -55,14 +55,22 @@ func main() {
 	fmt.Printf("subfolders: %v\nsubfiles: %v\n", subfolders, subfiles)
 	_, _ = subfolders, subfiles
 	for _, sf := range subfolders {
-		err := util.CreateInitialDJAFSManifest(sf, false)
+		lt, err := util.CreateInitialDJAFSManifest(sf, false)
+		if err != nil {
+			panic(err)
+		}
+		err = util.WriteJSONFile(filepath.Join(sf, "subfirs.djfl"), lt)
 		if err != nil {
 			panic(err)
 		}
 	}
 
 	for _, sf := range subfiles {
-		err := util.CreateInitialDJAFSManifest(sf, true)
+		lt, err := util.CreateInitialDJAFSManifest(sf, true)
+		if err != nil {
+			panic(err)
+		}
+		err = util.WriteJSONFile(filepath.Join(sf, "subfiles.djfl"), lt)
 		if err != nil {
 			panic(err)
 		}

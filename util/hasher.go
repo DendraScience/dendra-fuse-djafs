@@ -96,12 +96,8 @@ func RenameHashedFile(path string) (string, error) {
 	return fullName, os.Rename(path, fullName)
 }
 
-func CreateInitialDJAFSManifest(path string, filesOnly bool) error {
+func CreateInitialDJAFSManifest(path string, filesOnly bool) (LookupTable, error) {
 	lt := LookupTable{sorted: false, Entries: EntrySet{}}
-	manifestName := filepath.Join(path, "subdirs.djfl")
-	if filesOnly {
-		manifestName = filepath.Join(path, "subfiles.djfl")
-	}
 	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
 		if filepath.Ext(info.Name()) == ".djfl" {
 			return nil
@@ -130,10 +126,10 @@ func CreateInitialDJAFSManifest(path string, filesOnly bool) error {
 	})
 	if err != nil {
 		log.Printf("error walking path %s: %s", path, err)
-		return err
+		return LookupTable{}, err
 	}
 	sort.Sort(lt.Entries)
-	return WriteJSONFile(manifestName, lt)
+	return lt, nil
 }
 
 func CreateDJAFSArchive(path string, filesOnly bool) error {
