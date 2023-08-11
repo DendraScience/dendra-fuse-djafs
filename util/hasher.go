@@ -76,11 +76,12 @@ func CreateLookupEntry(path string) (LookupEntry, error) {
 	if info.IsDir() {
 		return l, ErrExpectedFile
 	}
-	newPath, err := RenameHashedFile(path)
-	l.Name = newPath
+	hash, err := GetFileHash(path)
+	l.Name = hash + filepath.Ext(path)
 	l.Target = path
 	l.Modified = info.ModTime()
 	l.FileSize = info.Size()
+	l.Inode = GetNewInode()
 	return l, err
 }
 
@@ -95,17 +96,22 @@ func RenameHashedFile(path string) (string, error) {
 	return fullName, os.Rename(path, fullName)
 }
 
-func CreateDJAFSManifest(path string, filesOnly bool) error {
+func CreateInitialDJAFSManifest(path string, filesOnly bool) error {
 	lt := LookupTable{sorted: false, Entries: EntrySet{}}
+	manifestName := filepath.Join(path, "subdirs.djfl")
+	if filesOnly {
+		manifestName = filepath.Join(path, "subfiles.djfl")
+	}
 	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
-		if filesOnly {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
-		}
-		if subpath == path {
+		if filepath.Ext(info.Name()) == ".djfl" {
 			return nil
 		}
+		if filesOnly && info.IsDir() && subpath != path {
+			return filepath.SkipDir
+		} else if filesOnly && info.IsDir() {
+			return nil
+		}
+
 		le, err := CreateLookupEntry(subpath)
 		if os.IsNotExist(err) {
 			return nil
@@ -114,38 +120,20 @@ func CreateDJAFSManifest(path string, filesOnly bool) error {
 			return nil
 		}
 		if errors.Is(err, ErrUnexpectedSymlink) {
-			log.Printf("Removing symlink %s", subpath)
-			os.Remove(subpath)
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-
 		lt.Entries = append(lt.Entries, le)
 		return nil
 	})
 	if err != nil {
+		log.Printf("error walking path %s: %s", path, err)
 		return err
 	}
 	sort.Sort(lt.Entries)
-	manifest := filepath.Join(path, "manifest.djfl")
-	err = WriteJSONFile(manifest, lt)
-	if err != nil {
-		return err
-	}
-	err = ZipInside(path, filesOnly)
-	if err != nil {
-		return err
-	}
-	for _, e := range lt.Entries {
-		err = os.Remove(e.Name)
-		if err != nil {
-			log.Printf("Failed to remove %s: %s", e.Name, err)
-		}
-	}
-	return nil
-	// TODO
+	return WriteJSONFile(manifestName, lt)
 }
 
 func CreateDJAFSArchive(path string, filesOnly bool) error {

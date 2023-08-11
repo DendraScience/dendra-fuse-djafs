@@ -3,7 +3,6 @@ package util
 import (
 	"archive/zip"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -41,7 +40,7 @@ func CopyToWorkDir(path string) (string, error) {
 	newName := HashPathFromHash(hash) + filepath.Ext(path)
 	workspacePrefix, err := WorkspacePrefixFromHashPath(newName)
 	workspacePrefix = filepath.Join(WorkDir, workspacePrefix)
-	fmt.Printf("workspacePrefix: %v\n", workspacePrefix)
+	// fmt.Printf("workspacePrefix: %v\n", workspacePrefix)
 	if err != nil {
 		return "", err
 	}
@@ -108,9 +107,9 @@ func GCWorkDirs() error {
 }
 
 func PackWorkDir(workDir string) error {
-	fmt.Println("workDir: ", workDir)
+	// fmt.Println("workDir: ", workDir)
 	zipPath := WorkDirPathToZipPath(workDir)
-	fmt.Println("zipPath: ", zipPath)
+	// fmt.Println("zipPath: ", zipPath)
 	// before pack, check if zip file exists
 	// and merge
 
@@ -144,6 +143,6 @@ func PackWorkDir(workDir string) error {
 			}
 		}
 	}
-	fmt.Println("compressing work dir: ", workDir, " to zip: ", zipPath)
+	// fmt.Println("compressing work dir: ", workDir, " to zip: ", zipPath)
 	return CompressHashed(workDir, zipPath)
 }

@@ -5,7 +5,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -70,7 +69,7 @@ func CompressHashed(path string, dest string) error {
 		if v.IsDir() {
 			continue
 		}
-		fmt.Println("compressing: ", filepath.Join(path, v.Name()))
+		//	fmt.Println("compressing: ", filepath.Join(path, v.Name()))
 		f, openErr := os.Open(filepath.Join(path, v.Name()))
 		if openErr != nil {
 			return openErr

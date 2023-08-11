@@ -14,7 +14,7 @@ func GetNewInode() uint64 {
 	return highestInode
 }
 
-func SeeInode(inode uint64) {
+func Set(inode uint64) {
 	go func(i uint64) {
 		inodeLock.Lock()
 		defer inodeLock.Unlock()

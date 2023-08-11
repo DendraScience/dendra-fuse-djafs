@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -54,8 +55,19 @@ func main() {
 	fmt.Printf("subfolders: %v\nsubfiles: %v\n", subfolders, subfiles)
 	_, _ = subfolders, subfiles
 	for _, sf := range subfolders {
-		util.CreateDJAFSManifest(sf, true)
+		err := util.CreateInitialDJAFSManifest(sf, false)
+		if err != nil {
+			panic(err)
+		}
 	}
+
+	for _, sf := range subfiles {
+		err := util.CreateInitialDJAFSManifest(sf, true)
+		if err != nil {
+			panic(err)
+		}
+	}
+	log.Println("created initial manifest files")
 	err = filepath.WalkDir(*directoryPath, func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
 			return nil
@@ -64,7 +76,7 @@ func main() {
 		if d.Type()&fs.ModeSymlink == fs.ModeSymlink {
 			return nil
 		}
-		fmt.Printf("path: %v\n", path)
+		//	fmt.Printf("path: %v\n", path)
 		_, err = util.CopyToWorkDir(path)
 		return err
 	})
