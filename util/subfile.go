@@ -2,6 +2,7 @@ package util
 
 import (
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -70,6 +71,12 @@ func DetermineZipBoundaries(path string, target int) (subfolderRoots []string, s
 			}
 			subfolderRoots = append(subfolderRoots, dirs...)
 			subfileRoots = append(subfileRoots, files...)
+			if len(dirs) > 0 {
+				log.Printf("Found new subfolder roots: %v\n", dirs)
+			}
+			if len(files) > 0 {
+				log.Printf("Found new subfile dirs: %v\n", files)
+			}
 		}
 	}
 	if hasFiles {

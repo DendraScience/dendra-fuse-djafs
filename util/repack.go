@@ -11,9 +11,10 @@ import (
 )
 
 var (
-	gcLock  sync.Mutex
-	WorkDir = ".work"
-	DataDir = ".data"
+	gcLock     sync.Mutex
+	WorkDir    = ".work"
+	DataDir    = ".data"
+	MappingDir = ".mappings"
 )
 
 func CopyToWorkDir(path, workDirPath, hash string) (string, error) {

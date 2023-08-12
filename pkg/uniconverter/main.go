@@ -44,6 +44,7 @@ func main() {
 	flag.Parse()
 	if *outputPath == "" || *directoryPath == "" {
 		flag.CommandLine.Usage()
+		os.Exit(1)
 	}
 	// Create the filesystem.
 	// The filesystem is created at the output path.
@@ -60,7 +61,7 @@ func main() {
 			panic(err)
 		}
 		subpath := strings.TrimPrefix(sf, *directoryPath)
-		newPath := filepath.Join(*outputPath, subpath)
+		newPath := filepath.Join(*outputPath, util.MappingDir, subpath)
 		err = os.MkdirAll(newPath, 0o777)
 		if err != nil {
 			panic(err)
@@ -77,7 +78,7 @@ func main() {
 			panic(err)
 		}
 		subpath := strings.TrimPrefix(sf, *directoryPath)
-		newPath := filepath.Join(*outputPath, subpath)
+		newPath := filepath.Join(*outputPath, util.MappingDir, subpath)
 		err = os.MkdirAll(newPath, 0o777)
 		if err != nil {
 			panic(err)
