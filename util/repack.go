@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -80,6 +81,21 @@ func WorkDirPathToZipPath(workDir string) string {
 	return filepath.Join(DataDir, wd+".djfz")
 }
 
+func worker(jobChan chan string, done chan struct{}) error {
+	for workDir := range jobChan {
+		err := PackWorkDir(workDir)
+		if err != nil {
+			return err
+		}
+		err = os.RemoveAll(workDir)
+		if err != nil {
+			return err
+		}
+	}
+	done <- struct{}{}
+	return nil
+}
+
 func GCWorkDirs() error {
 	gcLock.Lock()
 	defer gcLock.Unlock()
@@ -90,16 +106,20 @@ func GCWorkDirs() error {
 	if _, statErr := os.Stat(DataDir); statErr != nil {
 		os.MkdirAll(DataDir, 0o755)
 	}
+
+	doneChan := make(chan struct{}, 1)
+	jobChan := make(chan string, 1)
 	for _, workDir := range workDirs {
-		err := PackWorkDir(workDir)
-		if err != nil {
-			return err
-		}
-		err = os.RemoveAll(workDir)
-		if err != nil {
-			return err
-		}
+		jobChan <- workDir
 	}
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go worker(jobChan, doneChan)
+	}
+	close(jobChan)
+	for i := 0; i < runtime.NumCPU(); i++ {
+		<-doneChan
+	}
+
 	return nil
 }
 
