@@ -16,7 +16,7 @@ var (
 	DataDir = ".data"
 )
 
-func CopyToWorkDir(path string) (string, error) {
+func CopyToWorkDir(path, workDirPath, hash string) (string, error) {
 	stat, err := os.Stat(path)
 	if err != nil {
 		return "", err
@@ -33,11 +33,7 @@ func CopyToWorkDir(path string) (string, error) {
 	gcLock.Lock()
 	defer gcLock.Unlock()
 	// create work dir
-	hash, err := GetFileHash(path)
-	if err != nil {
-		return "", err
-	}
-	newName := HashPathFromHash(hash) + filepath.Ext(path)
+	newName := HashPathFromHashInitial(hash, workDirPath) + filepath.Ext(path)
 	workspacePrefix, err := WorkspacePrefixFromHashPath(newName)
 	workspacePrefix = filepath.Join(WorkDir, workspacePrefix)
 	// fmt.Printf("workspacePrefix: %v\n", workspacePrefix)

@@ -16,6 +16,10 @@ import (
 	"github.com/taigrr/colorhash"
 )
 
+// recommendation for ext3 is no more than 32000 files per directory
+// so if you increase this, don't increase it by too much
+const GlobalModulus = 5000
+
 var (
 	ErrExpectedFile      = fmt.Errorf("expected file, got directory")
 	ErrUnexpectedSymlink = fmt.Errorf("expected file, got symlink")
@@ -59,7 +63,7 @@ func (l LookupTable) GetOldestFileTS() time.Time {
 	return l.Entries[0].Modified
 }
 
-func CreateLookupEntry(path string) (LookupEntry, error) {
+func CreateLookupEntry(path, workDirPath string, initial bool) (LookupEntry, error) {
 	var l LookupEntry
 	info, err := os.Lstat(path)
 	if os.IsNotExist(err) {
@@ -77,8 +81,10 @@ func CreateLookupEntry(path string) (LookupEntry, error) {
 		return l, ErrExpectedFile
 	}
 	hash, err := GetFileHash(path)
-	l.Name = hash + filepath.Ext(path)
-	l.Target = path
+
+	_, err = CopyToWorkDir(path, workDirPath, hash)
+	l.Target = HashPathFromHashInitial(hash, workDirPath) + filepath.Ext(path)
+	l.Name = path
 	l.Modified = info.ModTime()
 	l.FileSize = info.Size()
 	l.Inode = GetNewInode()
@@ -96,7 +102,12 @@ func RenameHashedFile(path string) (string, error) {
 	return fullName, os.Rename(path, fullName)
 }
 
-func CreateInitialDJAFSManifest(path string, filesOnly bool) (LookupTable, error) {
+func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTable, error) {
+	if output == "" {
+		output = WorkDir
+	} else {
+		output = filepath.Join(output, WorkDir)
+	}
 	lt := LookupTable{sorted: false, Entries: EntrySet{}}
 	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
 		if filepath.Ext(info.Name()) == ".djfl" {
@@ -108,7 +119,7 @@ func CreateInitialDJAFSManifest(path string, filesOnly bool) (LookupTable, error
 			return nil
 		}
 
-		le, err := CreateLookupEntry(subpath)
+		le, err := CreateLookupEntry(subpath, output, true)
 		if os.IsNotExist(err) {
 			return nil
 		}
@@ -132,7 +143,7 @@ func CreateInitialDJAFSManifest(path string, filesOnly bool) (LookupTable, error
 	return lt, nil
 }
 
-func CreateDJAFSArchive(path string, filesOnly bool) error {
+func CreateDJAFSArchive(path, output string, filesOnly bool) error {
 	lt := LookupTable{sorted: false, Entries: EntrySet{}}
 	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
 		if filesOnly {
@@ -143,7 +154,7 @@ func CreateDJAFSArchive(path string, filesOnly bool) error {
 		if subpath == path {
 			return nil
 		}
-		le, err := CreateLookupEntry(subpath)
+		le, err := CreateLookupEntry(subpath, filepath.Join(output, WorkDir), false)
 		if os.IsNotExist(err) {
 			return nil
 		}
@@ -248,10 +259,63 @@ func HashPathFromHash(hash string) string {
 	hInt := colorhash.HashString(hash)
 	hInt = hInt % 1000
 	first := hInt
-	second := "00000"
-	third := hash
+	second := 0
 	// TODO check if directory is getting too big and split
-	return fmt.Sprintf("%d-%s-%s", first, second, third)
+
+	third := hash
+	return fmt.Sprintf("%d-%05d-%s", first, second, third)
+}
+
+func HashPathFromHashInitial(hash, workDir string) string {
+	hInt := colorhash.HashString(hash)
+	hInt = hInt % GlobalModulus
+	first := hInt
+	second := 0
+	third := hash
+
+	// first, format directory prefix
+	dir := filepath.Join(workDir, fmt.Sprintf("%04d", first))
+	// check to see how many iterables are in that directory
+	des, err := os.ReadDir(dir)
+	// if that directory doesn't exist at all, just return the hash
+	// as there's no need to iterate on a non-existent directory
+	// TODO check for other errors
+	if os.IsNotExist(err) || err != nil {
+		return fmt.Sprintf("%d-%05d-%s", first, second, third)
+	}
+
+	// if there are no iterables in that directory, just return the hash
+	if len(des) == 0 {
+		return fmt.Sprintf("%d-%05d-%s", first, second, third)
+	}
+
+	// for each of the iterable directoris inside of the parent
+	for _, de := range des {
+		// first make sure it's a directory before any other checks
+		if de.IsDir() {
+			// get the path to the iterable directory
+			iDir := filepath.Join(dir, de.Name())
+			// get the contents of the iterable directory
+			iDEs, err := os.ReadDir(iDir)
+			// if there's an error, just return the hash
+			if err != nil {
+				return fmt.Sprintf("%d-%05d-%s", first, second, third)
+			}
+			// if there are less than GlobalModulus files in the iterable directory
+			if len(iDEs) <= GlobalModulus {
+				return fmt.Sprintf("%d-%05d-%s", first, second, third)
+			}
+			// special case: if we've already seen this file, just return the hash
+			maybeFile := filepath.Join(iDir, fmt.Sprintf("%d-%05d-%s", first, second, third))
+			_, err = os.Stat(maybeFile)
+			if err != nil {
+				return fmt.Sprintf("%d-%05d-%s", first, second, third)
+			}
+			// otherwise, increment the second counter and try again
+			second++
+		}
+	}
+	return fmt.Sprintf("%d-%05d-%s", first, second, third)
 }
 
 func WorkspacePrefixFromHashPath(path string) (string, error) {

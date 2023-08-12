@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -36,7 +35,7 @@ import (
 
 var (
 	outputPath         = flag.String("o", "", "The output path for the filesystem.")
-	thresholdSize      = flag.Int("s", 100, "The threshold size for the filesystem.")
+	thresholdSize      = flag.Int("s", util.GlobalModulus, "The threshold size for the filesystem.")
 	thresholdTolerance = flag.Int("t", 1, "The threshold tolerance for the filesystem.")
 	directoryPath      = flag.String("d", "", "The directory path for the filesystem.")
 )
@@ -56,7 +55,7 @@ func main() {
 	fmt.Printf("subfolders: %v\nsubfiles: %v\n", subfolders, subfiles)
 	_, _ = subfolders, subfiles
 	for _, sf := range subfolders {
-		lt, err := util.CreateInitialDJAFSManifest(sf, false)
+		lt, err := util.CreateInitialDJAFSManifest(sf, *outputPath, false)
 		if err != nil {
 			panic(err)
 		}
@@ -73,7 +72,7 @@ func main() {
 	}
 
 	for _, sf := range subfiles {
-		lt, err := util.CreateInitialDJAFSManifest(sf, true)
+		lt, err := util.CreateInitialDJAFSManifest(sf, *outputPath, true)
 		if err != nil {
 			panic(err)
 		}
@@ -89,21 +88,7 @@ func main() {
 		}
 	}
 	log.Println("created initial manifest files")
-	err = filepath.WalkDir(*directoryPath, func(path string, d fs.DirEntry, err error) error {
-		if d.IsDir() {
-			return nil
-		}
-		// skip symlinks
-		if d.Type()&fs.ModeSymlink == fs.ModeSymlink {
-			return nil
-		}
-		//	fmt.Printf("path: %v\n", path)
-		_, err = util.CopyToWorkDir(path)
-		return err
-	})
-	if err != nil {
-		panic(err)
-	}
+
 	err = util.GCWorkDirs()
 	if err != nil {
 		panic(err)
