@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -102,6 +103,25 @@ func RenameHashedFile(path string) (string, error) {
 	return fullName, os.Rename(path, fullName)
 }
 
+type lookupWorkerData struct {
+	subpath string
+	output  string
+	initial bool
+}
+
+func initialLookupWorker(lwd chan lookupWorkerData, c chan LookupEntry, errChan chan error, doneChan chan struct{}) {
+	for x := range lwd {
+
+		le, err := CreateLookupEntry(x.subpath, x.output, x.initial)
+		if err != nil {
+			errChan <- err
+			continue
+		}
+		c <- le
+	}
+	doneChan <- struct{}{}
+}
+
 func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTable, error) {
 	if output == "" {
 		output = WorkDir
@@ -109,6 +129,14 @@ func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTabl
 		output = filepath.Join(output, WorkDir)
 	}
 	lt := LookupTable{sorted: false, Entries: EntrySet{}}
+	lookupEntryChan := make(chan LookupEntry, 1)
+	errChan := make(chan error, 1)
+	lwdChan := make(chan lookupWorkerData, 1)
+	doneChan := make(chan struct{}, 1)
+	threads := runtime.NumCPU()
+	for i := 0; i < threads; i++ {
+		go initialLookupWorker(lwdChan, lookupEntryChan, errChan, doneChan)
+	}
 	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
 		if filepath.Ext(info.Name()) == ".djfl" {
 			return nil
@@ -119,22 +147,36 @@ func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTabl
 			return nil
 		}
 
-		le, err := CreateLookupEntry(subpath, output, true)
-		if os.IsNotExist(err) {
-			return nil
-		}
-		if errors.Is(err, ErrExpectedFile) {
-			return nil
-		}
-		if errors.Is(err, ErrUnexpectedSymlink) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		lt.Entries = append(lt.Entries, le)
+		lwdChan <- lookupWorkerData{subpath, output, true}
 		return nil
 	})
+	close(lwdChan)
+workLoop:
+	for {
+		select {
+		case <-doneChan:
+			threads--
+			if threads == 0 {
+				break workLoop
+			}
+		case le := <-lookupEntryChan:
+			lt.Entries = append(lt.Entries, le)
+		case errCErr := <-errChan:
+			switch {
+			case errCErr == nil:
+			case os.IsNotExist(errCErr):
+			case errors.Is(errCErr, ErrExpectedFile):
+			case errors.Is(errCErr, ErrUnexpectedSymlink):
+			default:
+				log.Printf("error walking path %s: %s", path, err)
+				return LookupTable{}, errCErr
+			}
+		}
+	}
+
+	close(doneChan)
+	close(lookupEntryChan)
+	close(errChan)
 	if err != nil {
 		log.Printf("error walking path %s: %s", path, err)
 		return LookupTable{}, err
