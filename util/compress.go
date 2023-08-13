@@ -46,6 +46,20 @@ func CountFilesInDJFZ(path string) (int, error) {
 	return len(zrc.File), nil
 }
 
+func CheckFileInDJFZ(path string, filename string) (bool, error) {
+	zrc, err := zip.OpenReader(path)
+	if err != nil {
+		return false, err
+	}
+	defer zrc.Close()
+	for _, v := range zrc.File {
+		if v.Name == filename {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func CompressHashed(path string, dest string) error {
 	info, err := os.Stat(path)
 	if err != nil {
