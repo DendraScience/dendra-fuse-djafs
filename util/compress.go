@@ -17,8 +17,37 @@ func init() {
 	ErrNotDJFZExtension = errors.New("file path extension is not '.djfz'")
 }
 
+type DJFZ struct {
+	Path string
+}
+
+func NewDJFZ(path string) (DJFZ, error) {
+	if filepath.Ext(path) != "djfz" {
+		return DJFZ{}, ErrNotDJFZExtension
+	}
+	return DJFZ{
+		Path: path,
+	}, nil
+}
+
+//func (d *DJFZ) LookupTable() (LookupTable, error) {
+//	zrc, err := zip.OpenReader(d.Path)
+//	if err != nil {
+//		return LookupTable{}, err
+//	}
+//	f, err := zrc.Open("lookup.djfl")
+//	if err != nil {
+//		return LookupTable{}, err
+//	}
+//	x := bufio.NewReader(f)
+//	jd := json.NewDecoder(x)
+//	lt := LookupTable{}
+//	err = jd.Decode(&lt)
+//	return lt, err
+//}
+
 // assumes that the path is the name of a djfz file
-func ExtractLookupFromDJFZ(path string) (LookupTable, error) {
+func LookupFromDJFZ(path string) (LookupTable, error) {
 	if filepath.Ext(path) != "djfz" {
 		return LookupTable{}, ErrNotDJFZExtension
 	}
