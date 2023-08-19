@@ -316,19 +316,19 @@ func HashPathFromHashInitial(hash, workDir string) string {
 	third := hash
 
 	// first, format directory prefix
-	dir := filepath.Join(workDir, fmt.Sprintf("%04d", first))
+	dir := filepath.Join(workDir, fmt.Sprintf("%05d", first))
 	// check to see how many iterables are in that directory
 	des, err := os.ReadDir(dir)
 	// if that directory doesn't exist at all, just return the hash
 	// as there's no need to iterate on a non-existent directory
 	// TODO check for other errors
 	if os.IsNotExist(err) || err != nil {
-		return fmt.Sprintf("%d-%05d-%s", first, second, third)
+		return fmt.Sprintf("%05d-%05d-%s", first, second, third)
 	}
 
 	// if there are no iterables in that directory, just return the hash
 	if len(des) == 0 {
-		return fmt.Sprintf("%d-%05d-%s", first, second, third)
+		return fmt.Sprintf("%05d-%05d-%s", first, second, third)
 	}
 
 	// for each of the iterable directoris inside of the parent
@@ -341,23 +341,23 @@ func HashPathFromHashInitial(hash, workDir string) string {
 			iDEs, err := os.ReadDir(iDir)
 			// if there's an error, just return the hash
 			if err != nil {
-				return fmt.Sprintf("%d-%05d-%s", first, second, third)
+				return fmt.Sprintf("%05d-%05d-%s", first, second, third)
 			}
 			// if there are less than GlobalModulus files in the iterable directory
 			if len(iDEs) <= GlobalModulus {
-				return fmt.Sprintf("%d-%05d-%s", first, second, third)
+				return fmt.Sprintf("%05d-%05d-%s", first, second, third)
 			}
 			// special case: if we've already seen this file, just return the hash
-			maybeFile := filepath.Join(iDir, fmt.Sprintf("%d-%05d-%s", first, second, third))
+			maybeFile := filepath.Join(iDir, fmt.Sprintf("%05d-%05d-%s", first, second, third))
 			_, err = os.Stat(maybeFile)
 			if err != nil {
-				return fmt.Sprintf("%d-%05d-%s", first, second, third)
+				return fmt.Sprintf("%05d-%05d-%s", first, second, third)
 			}
 			// otherwise, increment the second counter and try again
 			second++
 		}
 	}
-	return fmt.Sprintf("%d-%05d-%s", first, second, third)
+	return fmt.Sprintf("%05d-%05d-%s", first, second, third)
 }
 
 func WorkspacePrefixFromHashPath(path string) (string, error) {
