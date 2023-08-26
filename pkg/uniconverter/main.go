@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"flag"
 	"fmt"
 	"log"
@@ -40,6 +41,11 @@ var (
 	directoryPath      = flag.String("d", "", "The directory path for the filesystem.")
 )
 
+type boundary struct {
+	Subfolders []string
+	Subfiles   []string
+}
+
 func main() {
 	flag.Parse()
 	if *outputPath == "" || *directoryPath == "" {
@@ -49,10 +55,26 @@ func main() {
 	// Create the filesystem.
 	// The filesystem is created at the output path.
 	os.MkdirAll(*outputPath, 0o777)
-	subfolders, subfiles, err := util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
+	subfolders, subfiles := []string{}, []string{}
+	saveState, err := os.Open(filepath.Join(*outputPath, "boundaries.gob"))
 	if err != nil {
-		panic(err)
+		subfolders, subfiles, err = util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
+		if err != nil {
+			panic(err)
+		}
+		f, err := os.Create(filepath.Join(*outputPath, "boundaries.gob"))
+		if err != nil {
+			panic(err)
+		}
+		gob.NewEncoder(f).Encode(boundary{Subfolders: subfolders, Subfiles: subfiles})
+		f.Close()
+	} else {
+		b := boundary{}
+		gob.NewDecoder(saveState).Decode(&b)
+		subfolders, subfiles = b.Subfolders, b.Subfiles
+		saveState.Close()
 	}
+
 	fmt.Printf("subfolders: %v\nsubfiles: %v\n", subfolders, subfiles)
 	_, _ = subfolders, subfiles
 	for _, sf := range subfolders {
@@ -90,7 +112,7 @@ func main() {
 	}
 	log.Println("created initial manifest files")
 
-	err = util.GCWorkDirs()
+	err = util.GCWorkDirs(filepath.Join(*outputPath, util.WorkDir))
 	if err != nil {
 		panic(err)
 	}

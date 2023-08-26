@@ -111,7 +111,6 @@ type lookupWorkerData struct {
 
 func initialLookupWorker(lwd chan lookupWorkerData, c chan LookupEntry, errChan chan error, doneChan chan struct{}) {
 	for x := range lwd {
-
 		le, err := CreateLookupEntry(x.subpath, x.output, x.initial)
 		if err != nil {
 			errChan <- err
@@ -137,20 +136,28 @@ func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTabl
 	for i := 0; i < threads; i++ {
 		go initialLookupWorker(lwdChan, lookupEntryChan, errChan, doneChan)
 	}
-	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
-		if filepath.Ext(info.Name()) == ".djfl" {
-			return nil
-		}
-		if filesOnly && info.IsDir() && subpath != path {
-			return filepath.SkipDir
-		} else if filesOnly && info.IsDir() {
-			return nil
-		}
+	go func() {
+		err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if filepath.Ext(info.Name()) == ".djfl" {
+				return nil
+			}
+			if filesOnly && info.IsDir() && subpath != path {
+				return filepath.SkipDir
+			} else if filesOnly && info.IsDir() {
+				return nil
+			}
 
-		lwdChan <- lookupWorkerData{subpath, output, true}
-		return nil
-	})
-	close(lwdChan)
+			lwdChan <- lookupWorkerData{subpath, output, true}
+			return nil
+		})
+		if err != nil {
+			errChan <- err
+		}
+		close(lwdChan)
+	}()
 workLoop:
 	for {
 		select {
@@ -168,7 +175,7 @@ workLoop:
 			case errors.Is(errCErr, ErrExpectedFile):
 			case errors.Is(errCErr, ErrUnexpectedSymlink):
 			default:
-				log.Printf("error walking path %s: %s", path, err)
+				log.Printf("error walking path %s: %s", path, errCErr)
 				return LookupTable{}, errCErr
 			}
 		}
@@ -177,10 +184,6 @@ workLoop:
 	close(doneChan)
 	close(lookupEntryChan)
 	close(errChan)
-	if err != nil {
-		log.Printf("error walking path %s: %s", path, err)
-		return LookupTable{}, err
-	}
 	sort.Sort(lt.Entries)
 	return lt, nil
 }

@@ -37,7 +37,7 @@ func CopyToWorkDir(path, workDirPath, hash string) (string, error) {
 	// create work dir
 	newName := HashPathFromHashInitial(hash, workDirPath) + filepath.Ext(path)
 	workspacePrefix, err := WorkspacePrefixFromHashPath(newName)
-	workspacePrefix = filepath.Join(WorkDir, workspacePrefix)
+	workspacePrefix = filepath.Join(workDirPath, workspacePrefix)
 	// fmt.Printf("workspacePrefix: %v\n", workspacePrefix)
 	if err != nil {
 		return "", err
@@ -57,7 +57,7 @@ func CopyToWorkDir(path, workDirPath, hash string) (string, error) {
 	return newName, err
 }
 
-func ListWorkDirs() ([]string, error) {
+func ListWorkDirs(workDirPath string) ([]string, error) {
 	topLevel, err := filepath.Glob(filepath.Join(WorkDir, "*"))
 	if err != nil {
 		return nil, err
@@ -96,10 +96,10 @@ func worker(jobChan chan string, done chan struct{}) error {
 	return nil
 }
 
-func GCWorkDirs() error {
+func GCWorkDirs(WorkDirPath string) error {
 	gcLock.Lock()
 	defer gcLock.Unlock()
-	workDirs, err := ListWorkDirs()
+	workDirs, err := ListWorkDirs(WorkDirPath)
 	if err != nil {
 		return err
 	}
