@@ -50,6 +50,7 @@ func main() {
 	fmt.Printf("subfolders: %v\nsubfiles: %v\n", subfolders, subfiles)
 	_, _ = subfolders, subfiles
 
+	// TODO: fix amount of arguments, missing output input.
 	for _, dir := range subfolders {
 		err := util.CreateDJAFSArchive(dir, false)
 		if err != nil {

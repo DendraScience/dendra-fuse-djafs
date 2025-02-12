@@ -12,6 +12,7 @@ func main() {
 		log.Fatal(err)
 	}
 	_ = files
+	// TODO: fix argument count mismatch, extra string
 	for _, f := range files {
 		err = util.ZipInside(f, "", false)
 		if err != nil {
