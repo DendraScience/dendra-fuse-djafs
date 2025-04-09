@@ -12,16 +12,16 @@ func CountSubfile(path string, target int) (count int, overage bool, err error) 
 	var info os.FileInfo
 	info, err = os.Stat(path)
 	if err != nil {
-		return
+		return 0, false, err
 	}
 	if !info.IsDir() {
 		err = ErrExpectedDirectory
-		return
+		return 0, false, err
 	}
 	var files []os.DirEntry
 	files, err = os.ReadDir(path)
 	if err != nil {
-		return
+		return 0, false, err
 	}
 	for _, f := range files {
 		if f.Name() == "." || f.Name() == ".." {
@@ -40,27 +40,40 @@ func CountSubfile(path string, target int) (count int, overage bool, err error) 
 			}
 			err = e
 			if err != nil {
-				return
+				return 0, false, err
 			}
 		}
 	}
-	return
+	return count, false, nil
 }
 
-// given a path and a maximum number of files per zip
+// Given a path and a maximum number of files per zip
 // this function tells you the path locations where you should
 // recursively zip and where to zip all relative files to build
 // out an initial directory
 // It does not take into account existing djfz archive files.
-func DetermineZipBoundaries(path string, target int) (subfolderRoots []string, subfileRoots []string, err error) {
+// Additionally, the maximum is a soft maximum, as it may be exceeded
+// if the files are not stratified enough via subdirectories.
+//
+// Returns the subfolder roots and the subfile roots.
+// These arrays are returned separately so that in a caller function, we know which directories
+// should be recursively compressed, and which we should just zip the direct children of.
+
+type ZipBoundary struct {
+	Path           string
+	IncludeSubdirs bool
+}
+
+func DetermineZipBoundaries(path string, target int) ([]ZipBoundary, error) {
+	boundaries := []ZipBoundary{}
 	_, over, err := CountSubfile(path, target)
 	if err != nil {
-		return []string{}, []string{}, err
+		return boundaries, err
 	}
 
 	files, err := os.ReadDir(path)
 	if err != nil {
-		return []string{}, []string{}, err
+		return boundaries, err
 	}
 
 	hasFiles := false
@@ -68,6 +81,9 @@ func DetermineZipBoundaries(path string, target int) (subfolderRoots []string, s
 
 	// First pass: check if we have files or subdirectories
 	for _, f := range files {
+		if f.Name() == "." || f.Name() == ".." {
+			continue
+		}
 		if !f.IsDir() {
 			hasFiles = true
 		} else {
@@ -75,31 +91,30 @@ func DetermineZipBoundaries(path string, target int) (subfolderRoots []string, s
 		}
 	}
 
-	// If we're under target and have subdirs, this is a subfolder root
-	if !over && hasSubdirs {
-		return []string{path}, []string{}, nil
+	// If we're under target and have subdirs, this is a subfolder root (and possibly a subfile root)
+	// but, either way, we're done processing this directory
+	if !over {
+		boundaries = append(boundaries, ZipBoundary{Path: path, IncludeSubdirs: true})
+		return boundaries, nil
 	}
 
-	// If we're over target and have subdirs, process subdirs recursively
-	if over && hasSubdirs {
+	// Process subdirs recursively, since we're over target
+	if hasSubdirs {
 		for _, f := range files {
 			if f.IsDir() {
-				dirs, files, err := DetermineZipBoundaries(filepath.Join(path, f.Name()), target)
+				bounds, err := DetermineZipBoundaries(filepath.Join(path, f.Name()), target)
 				if err != nil {
-					return []string{}, []string{}, err
+					return []ZipBoundary{}, err
 				}
-				subfolderRoots = append(subfolderRoots, dirs...)
-				subfileRoots = append(subfileRoots, files...)
+				boundaries = append(boundaries, bounds...)
 			}
 		}
-		return subfolderRoots, subfileRoots, nil
 	}
 
-	// If we have files at this level, this is a subfile root
+	// If we have files at this level and we're not a subfolder root, this is a subfile root
 	if hasFiles {
-		return []string{}, []string{path}, nil
+		boundaries = append(boundaries, ZipBoundary{Path: path, IncludeSubdirs: false})
 	}
 
-	// Empty directory case
-	return []string{}, []string{}, nil
+	return boundaries, nil
 }
