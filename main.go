@@ -18,9 +18,6 @@ const (
 )
 
 var (
-	Authors   string
-	BuildNo   string
-	BuildTime string
 	GitCommit string
 	Tag       string
 
@@ -30,14 +27,12 @@ var (
 
 func init() {
 	flag.Parse()
-
-	Authors = strings.ReplaceAll(Authors, "SpAcE", " ")
 	Tag = strings.ReplaceAll(Tag, ";", "; ")
 
-	if GitCommit == "" || BuildTime == "" {
+	if GitCommit == "" {
 		log.Fatalf("Binary built improperly. Version variables not set!")
 	}
-	fmt.Printf("%s Version information:\n|| Authors: %s\n|| Commit: %s\n|| Tag: %s\n|| Build No: %s\n|| Build Date: %s\n", Package, Authors, GitCommit, Tag, BuildNo, BuildTime)
+	fmt.Printf("%s Version information:\n|| Commit: %s\n|| Tag: %s\n", Package, GitCommit, Tag)
 
 	if *version {
 		os.Exit(0)
