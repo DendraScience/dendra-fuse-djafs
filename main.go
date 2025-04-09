@@ -19,7 +19,7 @@ const (
 
 var (
 	hostname string
-	version  = flag.Bool("version", false, "Get detailed version string and exit")
+	version  = flag.Bool("version", false, "Get version string and exit")
 )
 
 func init() {
@@ -38,7 +38,7 @@ func init() {
 }
 
 func commit() string {
-	var Commit = func() string {
+	Commit := func() string {
 		if info, ok := debug.ReadBuildInfo(); ok {
 			for _, setting := range info.Settings {
 				if setting.Key == "vcs.revision" {
