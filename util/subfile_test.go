@@ -23,15 +23,15 @@ func TestDetermineZipBoundaries(t *testing.T) {
 			os.Create(filepath.Join(pathb2, fmt.Sprintf("%d", i)))
 		}
 
-		dirs, files, err := DetermineZipBoundaries(dir, 5)
+		boundaries, err := DetermineZipBoundaries(dir, 5)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
-		if len(dirs) != 2 {
-			t.Errorf("Expected 2 subfolder roots, got %d", len(dirs))
+		if len(boundaries) != 2 {
+			t.Errorf("Expected 2 subfolder roots, got %d", len(boundaries))
 		}
-		if len(files) != 0 {
-			t.Errorf("Expected 0 subfile roots, got %d", len(files))
+		if boundaries[0].IncludeSubdirs {
+			t.Errorf("Expected subfolder root, got subfile root")
 		}
 	})
 	t.Run("Quadruple nested subfolders without higher files", func(t *testing.T) {
@@ -53,15 +53,15 @@ func TestDetermineZipBoundaries(t *testing.T) {
 			os.Create(filepath.Join(pathc1, fmt.Sprintf("%d", i)))
 		}
 
-		dirs, files, err := DetermineZipBoundaries(dir, 11)
+		boundaries, err := DetermineZipBoundaries(dir, 11)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
-		if len(dirs) != 3 {
-			t.Errorf("Expected 3 subfolder roots, got %d", len(dirs))
+		if len(boundaries) != 3 {
+			t.Errorf("Expected 3 subfolder roots, got %d", len(boundaries))
 		}
-		if len(files) != 0 {
-			t.Errorf("Expected 0 subfile roots, got %d", len(files))
+		if boundaries[0].IncludeSubdirs {
+			t.Errorf("Expected subfolder root, got subfile root")
 		}
 	})
 	t.Run("Triple nested subfolders with a higher file", func(t *testing.T) {
@@ -79,15 +79,15 @@ func TestDetermineZipBoundaries(t *testing.T) {
 		}
 		os.Create(filepath.Join(patha, fmt.Sprintf("%d", 0)))
 
-		dirs, files, err := DetermineZipBoundaries(dir, 5)
+		boundaries, err := DetermineZipBoundaries(dir, 5)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
-		if len(dirs) != 2 {
-			t.Errorf("Expected 2 subfolder roots, got %d", len(dirs))
+		if len(boundaries) != 2 {
+			t.Errorf("Expected 2 subfolder roots, got %d", len(boundaries))
 		}
-		if len(files) != 1 {
-			t.Errorf("Expected 1 subfile root, got %d", len(files))
+		if boundaries[0].IncludeSubdirs {
+			t.Errorf("Expected subfolder root, got subfile root")
 		}
 	})
 }
