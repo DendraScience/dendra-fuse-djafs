@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/dendrascience/dendra-archive-fuse/util"
 )
@@ -48,31 +50,48 @@ func main() {
 		panic(err)
 	}
 	fmt.Printf("subfolders: %v\nsubfiles: %v\n", subfolders, subfiles)
-	_, _ = subfolders, subfiles
 
-	// TODO: fix amount of arguments, missing output input.
+	// Process subfolders
 	for _, dir := range subfolders {
-		err := util.CreateDJAFSArchive(dir, false)
+		err := util.CreateDJAFSArchive(dir, *outputPath, false)
 		if err != nil {
 			panic(err)
 		}
 	}
+
+	// Process subfiles
 	for _, dir := range subfiles {
-		err := util.CreateDJAFSArchive(dir, true)
+		err := util.CreateDJAFSArchive(dir, *outputPath, true)
 		if err != nil {
 			panic(err)
 		}
 	}
 
-	// for each file under the subfiles path,
-	// hash the file and create an entry in the metadata file.
-	// then, zip all the files in the subfiles path into a .djfz (zip) file.
+	// Create metadata for all .djfz files
+	err = filepath.Walk(*outputPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if filepath.Ext(path) != ".djfz" {
+			return nil
+		}
 
-	// for each folder under the subfolders path,
-	// hash all the files in the folder and create an entry in the metadata file.
-	// for empty folders, create an entry in the metadata file pointing to that folder
-	// then, zip all the files in the subfolders path into a .djfz (zip) file.
+		// Get lookup table from zip
+		lt, err := util.LookupFromDJFZ(path)
+		if err != nil {
+			return err
+		}
 
-	// for all the .djfz files in the subfolders and subfiles path,
-	// record the metrics into the djfl file. for api entries later
+		// Generate and save metadata
+		metadata, err := lt.GenerateMetadata(path)
+		if err != nil {
+			return err
+		}
+
+		metadataPath := strings.TrimSuffix(path, ".djfz") + ".djfm"
+		return metadata.Save(metadataPath)
+	})
+	if err != nil {
+		panic(err)
+	}
 }
