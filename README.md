@@ -1,15 +1,20 @@
 # djafs - the Dendra JSON Archive File System
+
 (DeeJay-fs)
+
 ## Background info
+
 Original documentation on fuse:
 [fuse at nmsu](https://www.cs.nmsu.edu/~pfeiffer/fuse-tutorial/html/index.html)
 
 ### Bazel example
+
 [link to hellofs docs](https://pkg.go.dev/bazil.org/fuse@v0.0.0-20200524192727-fb710f7dfd05/examples/hellofs)
 [link to gh repo](https://github.com/bazil/fuse/blob/fb710f7dfd05/examples/hellofs/hello.go)
 [Bazel ZipFS](https://github.com/bazil/zipfs)
 
 ### Blog Example
+
 [link to blog](https://blog.trieoflogs.com/2021-05-25-fuse-filesystem-go/)
 
 Note, the blog example is the one that will be followed when building
@@ -17,6 +22,7 @@ the fuse driver. However, at early inspection, there's a notable bug
 in it: the inode counter doesn't use an atomic counter, but it should.
 
 ## Problem
+
 The archive is currently a simple, file-backed system.
 Nested year/month/day folders separate json files.
 These json files are taking up far too much space, and are highly compressible.
@@ -24,7 +30,9 @@ It would be great to store the files compressed, and decompress them
 on the fly when needed.
 
 ## Constraints
+
 Must haves:
+
 - As this is a filesystem, it needs to be performant
   - We need to be able to access files quickly
   - We need to be able to store files quickly
@@ -33,6 +41,7 @@ Must haves:
 - Good documentation. See: README.md
 
 Nice to haves:
+
 - We would like to be able to see a snapshot of the archive
   as it was for any given day
 - We would like the driver to be extensible such that file
@@ -43,25 +52,29 @@ Nice to haves:
 ## Architecture / Design
 
 ### Similar work
+
 As with anything, let's use the same principles used elsewhere
 in software architecture.
 This architecture is similar to the following concepts:
- - influxdb write-through caching / garbage collection
- - inode / dirent scaffolding
- - garbage collection
- - content-addressable hashing (ipfs)
- - library of babel
- - heap / stack memory model
- - probably a lot more
+
+- influxdb write-through caching / garbage collection
+- inode / dirent scaffolding
+- garbage collection
+- content-addressable hashing (ipfs)
+- library of babel
+- heap / stack memory model
+- probably a lot more
 
 ### Assumptions
- - To make things simpler, when viewing snapshots, we assume no time-series
-   data could have been generated for a date more than 24 hours in
-   the future from the snapshot date.
+
+- To make things simpler, when viewing snapshots, we assume no time-series
+  data could have been generated for a date more than 24 hours in
+  the future from the snapshot date.
 
 ### Design
 
 There are four notable pools of data which are relevant to djafs.
+
 1. FUSE Interface.
    The interface will follow the exact same directory structure as what's
    currently used, with nested directories of json.
@@ -103,7 +116,7 @@ There are four notable pools of data which are relevant to djafs.
    own lookup table file.
    The lookup table file will be JSON, and get compressed alongside the data,
    into a file named `inode.djfl` (since it roughly corresponds to some of the
-   responsibilitied an inode would have).
+   responsibilities an inode would have).
    The lookup records will contain a list of pairings from the filenames
    that should exist for a directory of data to the backing hashed files.
    The lookup records will be arranged as an array of objects, containing
@@ -157,22 +170,21 @@ Lookup files will use the extension `.djfl` (json files)
 Metadata files will use the extension `.djfm` (json files)
 
 Uncompressed metadata files will contain the following data for quick summary/metrics calculations:
- - Version of djfs used to pack the archive (useful for migrations)
- - Last update (useful for timestamps)
- - Oldest file timestamp
- - Compressed file Size
- - Uncompressed file size
- - Count of Files
- - Count of Unique files
 
-
+- Version of djfs used to pack the archive (useful for migrations)
+- Last update (useful for timestamps)
+- Oldest file timestamp
+- Compressed file Size
+- Uncompressed file size
+- Count of Files
+- Count of Unique files
 
 ## Development Roadmap
 
 1. Build out "utility functions" and tests
-  - Count all files under a subfolder until X
-  - Metadata generator
-  - sha256 renamer + lookup table creator
+  a. Count all files under a subfolder until X
+  a. Metadata generator
+  a. sha256 renamer + lookup table creator
 1. Create loader
 1. Create unloader
 1. Create repacker
