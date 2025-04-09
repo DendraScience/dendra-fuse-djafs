@@ -24,18 +24,20 @@ func CountSubfile(path string, target int) (count int, overage bool, err error) 
 		return
 	}
 	for _, f := range files {
-		if count > target {
-			return count, true, nil
-		}
 		if f.Name() == "." || f.Name() == ".." {
 			continue
 		}
 		if !f.IsDir() {
 			count++
+			if count > target {
+				return count, true, nil
+			}
 		} else {
-			c, _, e := CountSubfile(filepath.Join(path, f.Name()), target-count)
+			c, o, e := CountSubfile(filepath.Join(path, f.Name()), target)
 			count += c
-			overage = count > target
+			if o {
+				return count, true, nil
+			}
 			err = e
 			if err != nil {
 				return
@@ -55,31 +57,49 @@ func DetermineZipBoundaries(path string, target int) (subfolderRoots []string, s
 	if err != nil {
 		return []string{}, []string{}, err
 	}
-	if !over {
-		return []string{path}, []string{}, nil
-	}
+
 	files, err := os.ReadDir(path)
+	if err != nil {
+		return []string{}, []string{}, err
+	}
+
 	hasFiles := false
+	hasSubdirs := false
+
+	// First pass: check if we have files or subdirectories
 	for _, f := range files {
 		if !f.IsDir() {
 			hasFiles = true
 		} else {
-			dirs, files, err := DetermineZipBoundaries(filepath.Join(path, f.Name()), target)
-			if err != nil {
-				return []string{}, []string{}, err
-			}
-			subfolderRoots = append(subfolderRoots, dirs...)
-			subfileRoots = append(subfileRoots, files...)
-			//	if len(dirs) > 0 {
-			//		log.Printf("Found new subfolder roots: %v\n", dirs)
-			//	}
-			//	if len(files) > 0 {
-			//		log.Printf("Found new subfile dirs: %v\n", files)
-			//	}
+			hasSubdirs = true
 		}
 	}
-	if hasFiles {
-		subfileRoots = append(subfileRoots, path)
+
+	// If we're under target and have subdirs, this is a subfolder root
+	if !over && hasSubdirs {
+		return []string{path}, []string{}, nil
 	}
-	return
+
+	// If we're over target and have subdirs, process subdirs recursively
+	if over && hasSubdirs {
+		for _, f := range files {
+			if f.IsDir() {
+				dirs, files, err := DetermineZipBoundaries(filepath.Join(path, f.Name()), target)
+				if err != nil {
+					return []string{}, []string{}, err
+				}
+				subfolderRoots = append(subfolderRoots, dirs...)
+				subfileRoots = append(subfileRoots, files...)
+			}
+		}
+		return subfolderRoots, subfileRoots, nil
+	}
+
+	// If we have files at this level, this is a subfile root
+	if hasFiles {
+		return []string{}, []string{path}, nil
+	}
+
+	// Empty directory case
+	return []string{}, []string{}, nil
 }
