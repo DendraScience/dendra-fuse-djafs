@@ -48,7 +48,6 @@ Nice to haves:
   creation can be blocked
   - block creation of empty file on top of non-empty file
 
-
 ## Architecture / Design
 
 ### Similar work
@@ -156,8 +155,8 @@ There are four notable pools of data which are relevant to djafs.
    fuse driver itself because the backup solution may change over time, and
    changing the backup logic would require taking down the driver
    and bringing it back up.
-   Additionally, the chance of critical errors occuring increases exponentially
-   when a filesystem driver now must communicate over the internet.
+   Additionally, the chance of critical errors occurring increases exponentially
+   when a filesystem driver now must communicate over the internet.`
    When a file is read from the archive, the zip file is decompressed and the
    manifest is parsed as described above.
    The destination location for the archive expansion is marked in an in-memory
@@ -169,9 +168,75 @@ Compressed files use the extension `.djfz` (zip files)
 Lookup files will use the extension `.djfl` (json files)
 Metadata files will use the extension `.djfm` (json files)
 
+Here's how the file structure will look:
+
+The following tree output:
+
+```ascii
+.
+├── bin
+│   └── main.go
+├── cmd/
+│   ├── x.go
+│   ├── converter
+│   │   └── main.go
+│   ├── counter/
+│   │   ├── counter
+│   │   └── main.go
+│   └── uniconverter/
+│       └── main.go
+├── go.mod
+├── go.sum
+├── main.go
+├── Makefile
+├── README.md
+└── util/
+    ├── compress.go
+    ├── compress_test.go
+    ├── hasher.go
+    ├── inode.go
+    ├── metadata.go
+    ├── repack.go
+    ├── repack_test.go
+    ├── subfile.go
+    └── subfile_test.go
+
+```
+
+Would be transformed as follows (presuming the max is between 5-12):
+
+```ascii
+.
+├── lookups.djfl
+├── metadata.djfm
+├── files.djfz
+├── bin/
+│   ├── lookups.djfl
+│   ├── metadata.djfm
+│   └── files.djfz
+├── cmd/
+│   ├── lookups.djfl
+│   ├── metadata.djfm
+│   └── files.djfz
+└── util/
+    ├── lookups.djfl
+    ├── metadata.djfm
+    └── files.djfz
+```
+
+Notice:
+
+- All root files are always collapsed
+- All subdirectories are collapsed up until they hit the max filecap
+- Notice that the bin folder only had one file before, and now it has 3. This is a result of the following rules:
+  - Any time there are directories which are siblings to files.djfz, the files.djfz will only contain top-level files
+  - As a corollary, any time a Directory A contains Directory B and C, and sizeof(directory B) + sizeof(directory C) + files in A > max,
+    - Each subdirectory gets its own toplevel structure, regardless of true contents count
+- Finally, notice how x.go got folded into the same backing structure as its sibling subdirs
+
 Uncompressed metadata files will contain the following data for quick summary/metrics calculations:
 
-- Version of djfs used to pack the archive (useful for migrations)
+- Version of djafs used to pack the archive (useful for migrations)
 - Last update (useful for timestamps)
 - Oldest file timestamp
 - Compressed file Size

@@ -72,8 +72,8 @@ func CreateLookupEntry(path, workDirPath string, initial bool) (LookupEntry, err
 	}
 	// if the file is a symlink, skip it
 	if info.Mode()&os.ModeSymlink == os.ModeSymlink {
-		fmt.Printf("skippping unsupported symlink %s\n", path)
-		return l, errors.Join(ErrUnexpectedSymlink, fmt.Errorf("skippping unsupported symlink %s", path))
+		fmt.Printf("skipping unsupported symlink %s\n", path)
+		return l, errors.Join(ErrUnexpectedSymlink, fmt.Errorf("skipping unsupported symlink %s", path))
 	}
 	if err != nil {
 		return l, err

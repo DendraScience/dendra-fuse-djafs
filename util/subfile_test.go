@@ -23,8 +23,16 @@ func TestDetermineZipBoundaries(t *testing.T) {
 			os.Create(filepath.Join(pathb2, fmt.Sprintf("%d", i)))
 		}
 
-		// dirs, files, err := DetermineZipBoundaries(dir, 5)
-		// fmt.Printf("Dirss: %v\tFiles: %s\tError: %v \n", dirs, files, err)
+		dirs, files, err := DetermineZipBoundaries(dir, 5)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if len(dirs) != 2 {
+			t.Errorf("Expected 2 subfolder roots, got %d", len(dirs))
+		}
+		if len(files) != 0 {
+			t.Errorf("Expected 0 subfile roots, got %d", len(files))
+		}
 	})
 	t.Run("Quadruple nested subfolders without higher files", func(t *testing.T) {
 		dir := t.TempDir()
@@ -45,8 +53,16 @@ func TestDetermineZipBoundaries(t *testing.T) {
 			os.Create(filepath.Join(pathc1, fmt.Sprintf("%d", i)))
 		}
 
-		//	dirs, files, err := DetermineZipBoundaries(dir, 11)
-		// fmt.Printf("Dirss: %v\tFiles: %s\tError: %v \n", dirs, files, err)
+		dirs, files, err := DetermineZipBoundaries(dir, 11)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if len(dirs) != 3 {
+			t.Errorf("Expected 3 subfolder roots, got %d", len(dirs))
+		}
+		if len(files) != 0 {
+			t.Errorf("Expected 0 subfile roots, got %d", len(files))
+		}
 	})
 	t.Run("Triple nested subfolders with a higher file", func(t *testing.T) {
 		dir := t.TempDir()
@@ -63,8 +79,16 @@ func TestDetermineZipBoundaries(t *testing.T) {
 		}
 		os.Create(filepath.Join(patha, fmt.Sprintf("%d", 0)))
 
-		// dirs, files, err := DetermineZipBoundaries(dir, 5)
-		// fmt.Printf("Dirss: %v\tFiles: %s\tError: %v \n", dirs, files, err)
+		dirs, files, err := DetermineZipBoundaries(dir, 5)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if len(dirs) != 2 {
+			t.Errorf("Expected 2 subfolder roots, got %d", len(dirs))
+		}
+		if len(files) != 1 {
+			t.Errorf("Expected 1 subfile root, got %d", len(files))
+		}
 	})
 }
 
@@ -109,10 +133,9 @@ func TestCountSubfile(t *testing.T) {
 			}
 		})
 	}
-	t.Run("Test nonexistant path", func(t *testing.T) {
+	t.Run("Test nonexistent path", func(t *testing.T) {
 		dir := t.TempDir()
-		path := filepath.Join(dir, "nonexistant")
-		//	var nonexistantErr := nil
+		path := filepath.Join(dir, "nonexistent")
 		_, _, err := CountSubfile(path, 100)
 		if !os.IsNotExist(err) {
 			t.Errorf("Expected error of type IsNotExist but got %v", err)
@@ -122,7 +145,6 @@ func TestCountSubfile(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "file")
 		os.Create(path)
-		//	var nonexistantErr := nil
 		_, _, err := CountSubfile(path, 100)
 		if err != ErrExpectedDirectory {
 			t.Errorf("Expected error of type %v but got %v", ErrExpectedDirectory, err)
