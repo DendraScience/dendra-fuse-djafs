@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strings"
+	"runtime/debug"
 
 	"bazil.org/fuse"
 	_ "bazil.org/fuse/fs/fstestutil"
@@ -18,27 +18,37 @@ const (
 )
 
 var (
-	GitCommit string
-	Tag       string
-
 	hostname string
 	version  = flag.Bool("version", false, "Get detailed version string and exit")
 )
 
 func init() {
 	flag.Parse()
-	Tag = strings.ReplaceAll(Tag, ";", "; ")
-
+	GitCommit := commit()
 	if GitCommit == "" {
 		log.Fatalf("Binary built improperly. Version variables not set!")
 	}
-	fmt.Printf("%s Version information:\n|| Commit: %s\n|| Tag: %s\n", Package, GitCommit, Tag)
+	fmt.Printf("%s build commit: %s\n", Package, GitCommit)
 
 	if *version {
 		os.Exit(0)
 	} else {
 		fmt.Printf("Initialization success...\n")
 	}
+}
+
+func commit() string {
+	var Commit = func() string {
+		if info, ok := debug.ReadBuildInfo(); ok {
+			for _, setting := range info.Settings {
+				if setting.Key == "vcs.revision" {
+					return setting.Value
+				}
+			}
+		}
+		return ""
+	}()
+	return Commit
 }
 
 func main() {
