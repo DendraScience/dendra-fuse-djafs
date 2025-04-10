@@ -45,23 +45,18 @@ func main() {
 	// Create the filesystem.
 	// The filesystem is created at the output path.
 	os.MkdirAll(*outputPath, 0o777)
-	subfolders, subfiles, err := util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
+	total, _, err := util.CountSubfile(*directoryPath, *thresholdSize)
+	fmt.Fprintf(os.Stdout, "Your path contains %d subfiles.\n", total)
+
+	boundaries, err := util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("subfolders: %v\nsubfiles: %v\n", subfolders, subfiles)
+	fmt.Printf("We will create %d zip file boundaries to house this data...\n", len(boundaries))
 
 	// Process subfolders
-	for _, dir := range subfolders {
-		err := util.CreateDJAFSArchive(dir, *outputPath, false)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	// Process subfiles
-	for _, dir := range subfiles {
-		err := util.CreateDJAFSArchive(dir, *outputPath, true)
+	for _, boundary := range boundaries {
+		err := util.CreateDJAFSArchive(boundary.Path, *outputPath, boundary.IncludeSubdirs)
 		if err != nil {
 			panic(err)
 		}
