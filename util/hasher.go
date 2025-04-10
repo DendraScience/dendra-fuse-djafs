@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/taigrr/colorhash"
@@ -84,7 +85,7 @@ func CreateFileLookupEntry(path, workDirPath string, initial bool) (LookupEntry,
 	hash, err := GetFileHash(path)
 
 	_, err = CopyToWorkDir(path, workDirPath, hash)
-	l.Target = HashPathFromHashInitial(hash, workDirPath) + filepath.Ext(path)
+	l.Target = filepath.Join(hash, filepath.Ext(path))
 	l.Name = path
 	l.Modified = info.ModTime()
 	l.FileSize = info.Size()
@@ -109,7 +110,9 @@ type lookupWorkerData struct {
 	initial bool
 }
 
-func initialLookupWorker(lwd chan lookupWorkerData, c chan LookupEntry, errChan chan error, doneChan chan struct{}) {
+func initialLookupWorker(lwd <-chan lookupWorkerData, c chan<- LookupEntry, errChan chan<- error, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	for x := range lwd {
 		le, err := CreateFileLookupEntry(x.subpath, x.output, x.initial)
 		if err != nil {
@@ -118,7 +121,6 @@ func initialLookupWorker(lwd chan lookupWorkerData, c chan LookupEntry, errChan 
 		}
 		c <- le
 	}
-	doneChan <- struct{}{}
 }
 
 func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTable, error) {
@@ -127,16 +129,22 @@ func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTabl
 	} else {
 		output = filepath.Join(output, WorkDir)
 	}
+
 	lt := LookupTable{sorted: false, Entries: EntrySet{}}
-	lookupEntryChan := make(chan LookupEntry, 1)
-	errChan := make(chan error, 1)
-	lwdChan := make(chan lookupWorkerData, 1)
-	doneChan := make(chan struct{}, 1)
-	threads := runtime.NumCPU()
-	for i := 0; i < threads; i++ {
-		go initialLookupWorker(lwdChan, lookupEntryChan, errChan, doneChan)
+	lookupEntryChan := make(chan LookupEntry, runtime.NumCPU())
+	errChan := make(chan error, runtime.NumCPU())
+	lwdChan := make(chan lookupWorkerData, runtime.NumCPU())
+	var wg sync.WaitGroup
+
+	// Start workers
+	wg.Add(runtime.NumCPU())
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go initialLookupWorker(lwdChan, lookupEntryChan, errChan, &wg)
 	}
+
+	// Start walker
 	go func() {
+		defer close(lwdChan)
 		err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -156,34 +164,44 @@ func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTabl
 		if err != nil {
 			errChan <- err
 		}
-		close(lwdChan)
 	}()
-workLoop:
-	for {
+
+	// Process results
+	go func() {
+		wg.Wait()
+		close(lookupEntryChan)
+		close(errChan)
+	}()
+
+	var chansClosed bool
+	for !chansClosed {
 		select {
-		case <-doneChan:
-			threads--
-			if threads == 0 {
-				break workLoop
+		case le, ok := <-lookupEntryChan:
+			if !ok {
+				chansClosed = true
+				continue
 			}
-		case le := <-lookupEntryChan:
 			lt.Entries = append(lt.Entries, le)
-		case errCErr := <-errChan:
+		case err, ok := <-errChan:
+			if !ok {
+				chansClosed = true
+				continue
+			}
 			switch {
-			case errCErr == nil:
-			case os.IsNotExist(errCErr):
-			case errors.Is(errCErr, ErrExpectedFile):
-			case errors.Is(errCErr, ErrUnexpectedSymlink):
+			case err == nil:
+				continue
+			case errors.Is(err, os.ErrNotExist):
+				continue
+			case errors.Is(err, ErrExpectedFile):
+				continue
+			case errors.Is(err, ErrUnexpectedSymlink):
+				continue
 			default:
-				log.Printf("error walking path %s: %s", path, errCErr)
-				return LookupTable{}, errCErr
+				log.Printf("error walking path %s: %s", path, err)
+				return LookupTable{}, err
 			}
 		}
 	}
-
-	close(doneChan)
-	close(lookupEntryChan)
-	close(errChan)
 	sort.Sort(lt.Entries)
 	return lt, nil
 }
@@ -309,58 +327,6 @@ func HashPathFromHash(hash string) string {
 
 	third := hash
 	return fmt.Sprintf("%d-%05d-%s", first, second, third)
-}
-
-func HashPathFromHashInitial(hash, workDir string) string {
-	hInt := colorhash.HashString(hash)
-	hInt = hInt % GlobalModulus
-	first := hInt
-	second := 0
-	third := hash
-
-	// first, format directory prefix
-	dir := filepath.Join(workDir, fmt.Sprintf("%05d", first))
-	// check to see how many iterables are in that directory
-	des, err := os.ReadDir(dir)
-	// if that directory doesn't exist at all, just return the hash
-	// as there's no need to iterate on a non-existent directory
-	// TODO check for other errors
-	if os.IsNotExist(err) || err != nil {
-		return fmt.Sprintf("%05d-%05d-%s", first, second, third)
-	}
-
-	// if there are no iterables in that directory, just return the hash
-	if len(des) == 0 {
-		return fmt.Sprintf("%05d-%05d-%s", first, second, third)
-	}
-
-	// for each of the iterable directories inside of the parent
-	for _, de := range des {
-		// first make sure it's a directory before any other checks
-		if de.IsDir() {
-			// get the path to the iterable directory
-			iDir := filepath.Join(dir, de.Name())
-			// get the contents of the iterable directory
-			iDEs, err := os.ReadDir(iDir)
-			// if there's an error, just return the hash
-			if err != nil {
-				return fmt.Sprintf("%05d-%05d-%s", first, second, third)
-			}
-			// if there are less than GlobalModulus files in the iterable directory
-			if len(iDEs) <= GlobalModulus {
-				return fmt.Sprintf("%05d-%05d-%s", first, second, third)
-			}
-			// special case: if we've already seen this file, just return the hash
-			maybeFile := filepath.Join(iDir, fmt.Sprintf("%05d-%05d-%s", first, second, third))
-			_, err = os.Stat(maybeFile)
-			if err != nil {
-				return fmt.Sprintf("%05d-%05d-%s", first, second, third)
-			}
-			// otherwise, increment the second counter and try again
-			second++
-		}
-	}
-	return fmt.Sprintf("%05d-%05d-%s", first, second, third)
 }
 
 func WorkspacePrefixFromHashPath(path string) (string, error) {

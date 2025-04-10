@@ -35,7 +35,7 @@ func NewDJFZ(path string) (DJFZ, error) {
 //	if err != nil {
 //		return LookupTable{}, err
 //	}
-//	f, err := zrc.Open("lookup.djfl")
+//	f, err := zrc.Open("lookups.djfl")
 //	if err != nil {
 //		return LookupTable{}, err
 //	}
@@ -55,7 +55,7 @@ func LookupFromDJFZ(path string) (LookupTable, error) {
 	if err != nil {
 		return LookupTable{}, err
 	}
-	f, err := zrc.Open("lookup.djfl")
+	f, err := zrc.Open("lookups.djfl")
 	if err != nil {
 		return LookupTable{}, err
 	}
@@ -132,10 +132,8 @@ func CompressHashed(path string, dest string) error {
 }
 
 func ZipInside(path string, filesOnly bool) error {
-	filename := "subdirs.djfz"
-	if filesOnly {
-		filename = "files.djfz"
-	}
+	filename := "files.djfz"
+
 	info, err := os.Stat(path)
 	if err != nil {
 		return err
