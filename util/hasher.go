@@ -28,41 +28,57 @@ var (
 	ErrInvalidHashPath   = fmt.Errorf("invalid hash path")
 )
 
-type LookupTable struct {
-	Entries EntrySet `json:"entries"`
-	sorted  bool
+type (
+	LookupEntry struct {
+		FileSize int64     `json:"size"`     // size of the file in bytes
+		Inode    uint64    `json:"inode"`    // inode number of the file
+		Modified time.Time `json:"modified"` // modification time of the file
+		Name     string    `json:"name"`     // name of the file as it appears in FUSE
+		Target   string    `json:"target"`   // filepath of the hashed filename
+	}
+	LookupEntries struct {
+		entries []LookupEntry
+		sorted  bool
+	}
+	LookupTable struct {
+		Entries LookupEntries `json:"entries"`
+		sorted  bool
+	}
+)
+
+func (e LookupEntries) Add(le LookupEntry) {
+	e.sorted = false
+	e.entries = append(e.entries, le)
 }
 
-type EntrySet []LookupEntry
-
-func (e EntrySet) Len() int {
-	return len(e)
+func (e LookupEntries) Sort() {
+	sort.Sort(e)
+	e.sorted = true
 }
 
-func (e EntrySet) Swap(i, j int) {
-	e[i], e[j] = e[j], e[i]
+func (e LookupEntries) Len() int {
+	return len(e.entries)
 }
 
-func (e EntrySet) Less(i, j int) bool {
-	return e[i].Modified.Before(e[j].Modified)
+func (e LookupEntries) Swap(i, j int) {
+	e.entries[i], e.entries[j] = e.entries[j], e.entries[i]
 }
 
-type LookupEntry struct {
-	FileSize int64     `json:"size"`     // size of the file in bytes
-	Inode    uint64    `json:"inode"`    // inode number of the file
-	Modified time.Time `json:"modified"` // modification time of the file
-	Name     string    `json:"name"`     // name of the file as it appears in FUSE
-	Target   string    `json:"target"`   // filepath of the hashed filename
+func (e LookupEntries) Less(i, j int) bool {
+	return e.entries[i].Modified.Before(e.entries[j].Modified)
 }
 
 // GetOldest returns the first modification entry, assuming
 // the Entries slice is sorted.
 // TODO ensure the entries are sorted during garbage collection
 func (l LookupTable) GetOldestFileTS() time.Time {
-	if len(l.Entries) == 0 {
+	if l.Entries.Len() == 0 {
 		return time.Time{}
 	}
-	return l.Entries[0].Modified
+	if !l.Entries.sorted {
+		l.Entries.Sort()
+	}
+	return l.Entries.entries[0].Modified
 }
 
 func CreateFileLookupEntry(path, workDirPath string, initial bool) (LookupEntry, error) {
@@ -130,7 +146,7 @@ func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTabl
 		output = filepath.Join(output, WorkDir)
 	}
 
-	lt := LookupTable{sorted: false, Entries: EntrySet{}}
+	lt := LookupTable{sorted: false, Entries: LookupEntries{}}
 	lookupEntryChan := make(chan LookupEntry, runtime.NumCPU())
 	errChan := make(chan error, runtime.NumCPU())
 	lwdChan := make(chan lookupWorkerData, runtime.NumCPU())
@@ -181,7 +197,7 @@ func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTabl
 				chansClosed = true
 				continue
 			}
-			lt.Entries = append(lt.Entries, le)
+			lt.Entries.Add(le)
 		case err, ok := <-errChan:
 			if !ok {
 				chansClosed = true
@@ -208,7 +224,7 @@ func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTabl
 
 func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 	filesOnly := !includeSubdirs
-	lt := LookupTable{sorted: false, Entries: EntrySet{}}
+	lt := LookupTable{sorted: false, Entries: LookupEntries{}}
 
 	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
 		if filesOnly && info.IsDir() {
@@ -232,7 +248,7 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 			return err
 		}
 
-		lt.Entries = append(lt.Entries, le)
+		lt.Entries.Add(le)
 		return nil
 	})
 	if err != nil {
@@ -248,7 +264,7 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 	if err != nil {
 		return err
 	}
-	for _, e := range lt.Entries {
+	for _, e := range lt.Entries.entries {
 		err = os.Remove(e.Name)
 		if err != nil {
 			log.Printf("Failed to remove %s: %s", e.Name, err)
@@ -269,15 +285,15 @@ func WriteJSONFile(path string, v interface{}) error {
 
 // Does the opposite of GetOldestFileTS
 func (l LookupTable) GetNewestFileTS() time.Time {
-	if len(l.Entries) == 0 {
+	if l.Entries.Len() == 0 {
 		return time.Time{}
 	}
-	return l.Entries[len(l.Entries)-1].Modified
+	return l.Entries.entries[l.Entries.Len()-1].Modified
 }
 
 func (l LookupTable) GetTotalFileCount() int {
 	files := make(map[string]bool)
-	for _, e := range l.Entries {
+	for _, e := range l.Entries.entries {
 		files[e.Name] = true
 	}
 	return len(files)
@@ -285,7 +301,7 @@ func (l LookupTable) GetTotalFileCount() int {
 
 func (l LookupTable) GetTargetFileCount() int {
 	files := make(map[string]bool)
-	for _, e := range l.Entries {
+	for _, e := range l.Entries.entries {
 		files[e.Target] = true
 	}
 	return len(files)
@@ -293,14 +309,13 @@ func (l LookupTable) GetTargetFileCount() int {
 
 // TODO Optimization: consider using a taint variable instead of sorting on every addition
 func (l LookupTable) AddFileEntry(e LookupEntry) LookupTable {
-	l.Entries = append(l.Entries, e)
-	sort.Sort(l.Entries)
+	l.Entries.Add(e)
 	return l
 }
 
 func (l LookupTable) GetUncompressedSize() int {
 	total := 0
-	for _, e := range l.Entries {
+	for _, e := range l.Entries.entries {
 		total += int(e.FileSize)
 	}
 	return total
