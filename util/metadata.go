@@ -10,7 +10,7 @@ import (
 
 type Metadata struct {
 	CompressedSize   int       `json:"compressed_size"`
-	DJFSVersion      string    `json:"djfs_version"`
+	DJAFSVersion     string    `json:"djafs_version"`
 	NewestFileTS     time.Time `json:"newest_file_ts"`
 	OldestFileTS     time.Time `json:"oldest_file_ts"`
 	TargetFileCount  int       `json:"target_file_count"`
@@ -36,7 +36,7 @@ func (l LookupTable) GenerateMetadata(path string) (Metadata, error) {
 		return m, err
 	}
 	m.CompressedSize = int(stat.Size())
-	m.DJFSVersion = GetVersion()
+	m.DJAFSVersion = GetVersion()
 	m.NewestFileTS = l.GetNewestFileTS()
 	m.OldestFileTS = l.GetOldestFileTS()
 	m.TargetFileCount = l.GetTargetFileCount()
