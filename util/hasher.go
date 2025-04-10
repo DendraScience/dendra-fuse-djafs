@@ -188,13 +188,13 @@ workLoop:
 	return lt, nil
 }
 
-func CreateDJAFSArchive(path, output string, filesOnly bool) error {
+func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
+	filesOnly := !includeSubdirs
 	lt := LookupTable{sorted: false, Entries: EntrySet{}}
+
 	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
-		if filesOnly {
-			if info.IsDir() {
-				return filepath.SkipDir
-			}
+		if filesOnly && info.IsDir() {
+			return filepath.SkipDir
 		}
 		if subpath == path {
 			return nil
@@ -221,7 +221,7 @@ func CreateDJAFSArchive(path, output string, filesOnly bool) error {
 		return err
 	}
 	sort.Sort(lt.Entries)
-	manifest := filepath.Join(path, "manifest.djfl")
+	manifest := filepath.Join(path, "lookup.djfl")
 	err = WriteJSONFile(manifest, lt)
 	if err != nil {
 		return err
@@ -334,7 +334,7 @@ func HashPathFromHashInitial(hash, workDir string) string {
 		return fmt.Sprintf("%05d-%05d-%s", first, second, third)
 	}
 
-	// for each of the iterable directoris inside of the parent
+	// for each of the iterable directories inside of the parent
 	for _, de := range des {
 		// first make sure it's a directory before any other checks
 		if de.IsDir() {
