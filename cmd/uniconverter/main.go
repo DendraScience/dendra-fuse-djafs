@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/gob"
 	"flag"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,8 +49,10 @@ func main() {
 	// The filesystem is created at the output path.
 	os.MkdirAll(*outputPath, 0o777)
 	saveState, err := os.Open(filepath.Join(*outputPath, "boundaries.gob"))
+	boundaries := []util.ZipBoundary{}
 	if err != nil {
-		boundaries, err := util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
+
+		boundaries, err = util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
 		if err != nil {
 			panic(err)
 		}
@@ -62,7 +63,6 @@ func main() {
 		gob.NewEncoder(f).Encode(boundaries)
 		f.Close()
 	} else {
-		boundaries := []util.ZipBoundary{}
 		gob.NewDecoder(saveState).Decode(&boundaries)
 		saveState.Close()
 	}
@@ -71,62 +71,21 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		subpath := strings.TrimPrefix(sf, *directoryPath)
+		subpath := strings.TrimPrefix(boundary.Path, *directoryPath)
 		newPath := filepath.Join(*outputPath, util.MappingDir, subpath)
 		err = os.MkdirAll(newPath, 0o777)
 		if err != nil {
 			panic(err)
 		}
-		err = util.WriteJSONFile(filepath.Join(newPath, "subdirs.djfl"), lt)
+		err = util.WriteJSONFile(filepath.Join(newPath, "lookups.djfl"), lt)
 		if err != nil {
 			panic(err)
 		}
 	}
-
-	for _, sf := range subfiles {
-		lt, err := util.CreateInitialDJAFSManifest(sf, *outputPath, true)
-		if err != nil {
-			panic(err)
-		}
-		subpath := strings.TrimPrefix(sf, *directoryPath)
-		newPath := filepath.Join(*outputPath, util.MappingDir, subpath)
-		err = os.MkdirAll(newPath, 0o777)
-		if err != nil {
-			panic(err)
-		}
-		err = util.WriteJSONFile(filepath.Join(newPath, "subfiles.djfl"), lt)
-		if err != nil {
-			panic(err)
-		}
-	}
-	log.Println("created initial manifest files")
 
 	err = util.GCWorkDirs(filepath.Join(*outputPath, util.WorkDir))
 	if err != nil {
 		panic(err)
 	}
-	//	for _, dir := range subfolders {
-	//		err := util.CreateDJAFSArchive(dir, false)
-	//		if err != nil {
-	//			panic(err)
-	//		}
-	//	}
-	//	for _, dir := range subfiles {
-	//		err := util.CreateDJAFSArchive(dir, true)
-	//		if err != nil {
-	//			panic(err)
-	//		}
-	//	}
 
-	// for each file under the subfiles path,
-	// hash the file and create an entry in the metadata file.
-	// then, zip all the files in the subfiles path into a .djfz (zip) file.
-
-	// for each folder under the subfolders path,
-	// hash all the files in the folder and create an entry in the metadata file.
-	// for empty folders, create an entry in the metadata file pointing to that folder
-	// then, zip all the files in the subfolders path into a .djfz (zip) file.
-
-	// for all the .djfz files in the subfolders and subfiles path,
-	// record the metrics into the djfl file. for api entries later
 }
