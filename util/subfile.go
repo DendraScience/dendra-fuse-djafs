@@ -8,7 +8,7 @@ import (
 
 var ErrExpectedDirectory = errors.New("expected directory but got file")
 
-func CountSubfile(path string, target int) (count int, overage bool, err error) {
+func CountSubfile(path string, target int) (count int, isOverTarget bool, err error) {
 	var info os.FileInfo
 	info, err = os.Stat(path)
 	if err != nil {
@@ -44,7 +44,7 @@ func CountSubfile(path string, target int) (count int, overage bool, err error) 
 			}
 		}
 	}
-	return count, false, nil
+	return count, count > target, nil
 }
 
 // Given a path and a maximum number of files per zip
@@ -66,7 +66,7 @@ type ZipBoundary struct {
 
 func DetermineZipBoundaries(path string, target int) ([]ZipBoundary, error) {
 	boundaries := []ZipBoundary{}
-	_, over, err := CountSubfile(path, target)
+	_, isOver, err := CountSubfile(path, target)
 	if err != nil {
 		return boundaries, err
 	}
@@ -93,14 +93,16 @@ func DetermineZipBoundaries(path string, target int) ([]ZipBoundary, error) {
 
 	// If we're under target and have subdirs, this is a subfolder root (and possibly a subfile root)
 	// but, either way, we're done processing this directory
-	if !over {
+	if !isOver {
 		boundaries = append(boundaries, ZipBoundary{Path: path, IncludeSubdirs: true})
 		return boundaries, nil
 	}
 
 	// Process subdirs recursively, since we're over target
 	if hasSubdirs {
+
 		for _, f := range files {
+
 			if f.IsDir() {
 				bounds, err := DetermineZipBoundaries(filepath.Join(path, f.Name()), target)
 				if err != nil {
