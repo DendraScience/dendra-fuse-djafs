@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/gob"
 	"flag"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -41,11 +40,6 @@ var (
 	directoryPath      = flag.String("d", "", "The directory path for the filesystem.")
 )
 
-type boundary struct {
-	Subfolders []string
-	Subfiles   []string
-}
-
 func main() {
 	flag.Parse()
 	if *outputPath == "" || *directoryPath == "" {
@@ -55,10 +49,9 @@ func main() {
 	// Create the filesystem.
 	// The filesystem is created at the output path.
 	os.MkdirAll(*outputPath, 0o777)
-	subfolders, subfiles := []string{}, []string{}
 	saveState, err := os.Open(filepath.Join(*outputPath, "boundaries.gob"))
 	if err != nil {
-		subfolders, subfiles, err = util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
+		boundaries, err := util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
 		if err != nil {
 			panic(err)
 		}
@@ -66,19 +59,15 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		gob.NewEncoder(f).Encode(boundary{Subfolders: subfolders, Subfiles: subfiles})
+		gob.NewEncoder(f).Encode(boundaries)
 		f.Close()
 	} else {
-		b := boundary{}
-		gob.NewDecoder(saveState).Decode(&b)
-		subfolders, subfiles = b.Subfolders, b.Subfiles
+		boundaries := []util.ZipBoundary{}
+		gob.NewDecoder(saveState).Decode(&boundaries)
 		saveState.Close()
 	}
-
-	fmt.Printf("subfolders: %v\nsubfiles: %v\n", subfolders, subfiles)
-	_, _ = subfolders, subfiles
-	for _, sf := range subfolders {
-		lt, err := util.CreateInitialDJAFSManifest(sf, *outputPath, false)
+	for _, boundary := range boundaries {
+		lt, err := util.CreateInitialDJAFSManifest(boundary.Path, *outputPath, boundary.IncludeSubdirs)
 		if err != nil {
 			panic(err)
 		}
