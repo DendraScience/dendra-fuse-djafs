@@ -47,11 +47,11 @@ func (e EntrySet) Less(i, j int) bool {
 }
 
 type LookupEntry struct {
-	FileSize int64     `json:"size"`
-	Inode    uint64    `json:"inode"`
-	Modified time.Time `json:"modified"`
-	Name     string    `json:"name"`
-	Target   string    `json:"target"`
+	FileSize int64     `json:"size"`     // size of the file in bytes
+	Inode    uint64    `json:"inode"`    // inode number of the file
+	Modified time.Time `json:"modified"` // modification time of the file
+	Name     string    `json:"name"`     // name of the file as it appears in FUSE
+	Target   string    `json:"target"`   // filepath of the hashed filename
 }
 
 // GetOldest returns the first modification entry, assuming
@@ -64,7 +64,7 @@ func (l LookupTable) GetOldestFileTS() time.Time {
 	return l.Entries[0].Modified
 }
 
-func CreateLookupEntry(path, workDirPath string, initial bool) (LookupEntry, error) {
+func CreateFileLookupEntry(path, workDirPath string, initial bool) (LookupEntry, error) {
 	var l LookupEntry
 	info, err := os.Lstat(path)
 	if os.IsNotExist(err) {
@@ -111,7 +111,7 @@ type lookupWorkerData struct {
 
 func initialLookupWorker(lwd chan lookupWorkerData, c chan LookupEntry, errChan chan error, doneChan chan struct{}) {
 	for x := range lwd {
-		le, err := CreateLookupEntry(x.subpath, x.output, x.initial)
+		le, err := CreateFileLookupEntry(x.subpath, x.output, x.initial)
 		if err != nil {
 			errChan <- err
 			continue
@@ -199,7 +199,7 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 		if subpath == path {
 			return nil
 		}
-		le, err := CreateLookupEntry(subpath, filepath.Join(output, WorkDir), false)
+		le, err := CreateFileLookupEntry(subpath, filepath.Join(output, WorkDir), false)
 		if os.IsNotExist(err) {
 			return nil
 		}
