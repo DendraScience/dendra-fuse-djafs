@@ -31,11 +31,13 @@ func GetVersion() string {
 // metadata struct file to accompany the zip
 func (l LookupTable) GenerateMetadata(path string) (Metadata, error) {
 	var m Metadata
-	stat, err := os.Stat(path)
-	if err != nil {
-		return m, err
+	if path != "" {
+		stat, err := os.Stat(path)
+		if err != nil {
+			return m, err
+		}
+		m.CompressedSize = int(stat.Size())
 	}
-	m.CompressedSize = int(stat.Size())
 	m.DJAFSVersion = GetVersion()
 	m.NewestFileTS = l.GetNewestFileTS()
 	m.OldestFileTS = l.GetOldestFileTS()
