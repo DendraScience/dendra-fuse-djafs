@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/gob"
 	"flag"
 	"os"
 	"path/filepath"
@@ -48,36 +47,31 @@ func main() {
 	// Create the filesystem.
 	// The filesystem is created at the output path.
 	os.MkdirAll(*outputPath, 0o777)
-	saveState, err := os.Open(filepath.Join(*outputPath, "boundaries.gob"))
-	boundaries := []util.ZipBoundary{}
+	boundaries, err := util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
 	if err != nil {
-
-		boundaries, err = util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
-		if err != nil {
-			panic(err)
-		}
-		f, err := os.Create(filepath.Join(*outputPath, "boundaries.gob"))
-		if err != nil {
-			panic(err)
-		}
-		gob.NewEncoder(f).Encode(boundaries)
-		f.Close()
-	} else {
-		gob.NewDecoder(saveState).Decode(&boundaries)
-		saveState.Close()
+		panic(err)
 	}
+
 	for _, boundary := range boundaries {
 		lt, err := util.CreateInitialDJAFSManifest(boundary.Path, *outputPath, boundary.IncludeSubdirs)
 		if err != nil {
 			panic(err)
 		}
 		subpath := strings.TrimPrefix(boundary.Path, *directoryPath)
-		newPath := filepath.Join(*outputPath, util.MappingDir, subpath)
+		newPath := filepath.Join(*outputPath, util.DataDir, subpath)
 		err = os.MkdirAll(newPath, 0o777)
 		if err != nil {
 			panic(err)
 		}
 		err = util.WriteJSONFile(filepath.Join(newPath, "lookups.djfl"), lt)
+		if err != nil {
+			panic(err)
+		}
+		metadata, err := lt.GenerateMetadata("")
+		if err != nil {
+			panic(err)
+		}
+		err = util.WriteJSONFile(filepath.Join(newPath, "metadata.djfm"), metadata)
 		if err != nil {
 			panic(err)
 		}

@@ -12,10 +12,9 @@ import (
 )
 
 var (
-	gcLock     sync.Mutex
-	WorkDir    = ".work"
-	DataDir    = ".data"
-	MappingDir = ".mappings"
+	gcLock  sync.Mutex
+	WorkDir = ".work"
+	DataDir = ".data"
 )
 
 func CopyToWorkDir(path, workDirPath, hash string) (string, error) {
@@ -81,18 +80,20 @@ func WorkDirPathToZipPath(workDir string) string {
 	return filepath.Join(DataDir, wd+".djfz")
 }
 
-func worker(jobChan chan string, done chan struct{}) error {
+func worker(jobChan chan string, errChan chan error) error {
 	for workDir := range jobChan {
 		err := PackWorkDir(workDir)
 		if err != nil {
+			errChan <- err
 			return err
 		}
 		err = os.RemoveAll(workDir)
 		if err != nil {
+			errChan <- err
 			return err
 		}
 	}
-	done <- struct{}{}
+	errChan <- nil
 	return nil
 }
 
@@ -107,17 +108,28 @@ func GCWorkDirs(WorkDirPath string) error {
 		os.MkdirAll(DataDir, 0o755)
 	}
 
-	doneChan := make(chan struct{}, 1)
 	jobChan := make(chan string, 1)
+	errChan := make(chan error, runtime.NumCPU())
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go worker(jobChan, errChan)
+	}
 	for _, workDir := range workDirs {
 		jobChan <- workDir
 	}
-	for i := 0; i < runtime.NumCPU(); i++ {
-		go worker(jobChan, doneChan)
-	}
+
 	close(jobChan)
+
+	// Collect errors
+	var errs []error
 	for i := 0; i < runtime.NumCPU(); i++ {
-		<-doneChan
+		if err := <-errChan; err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	if len(errs) > 0 {
+		// Handle or return errors
+		return errors.Join(errs...)
 	}
 
 	return nil
