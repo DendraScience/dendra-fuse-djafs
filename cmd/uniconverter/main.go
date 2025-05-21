@@ -47,39 +47,66 @@ func main() {
 	// Create the filesystem.
 	// The filesystem is created at the output path.
 	os.MkdirAll(*outputPath, 0o777)
+
+	stagingRoot := filepath.Join(*outputPath, ".staging")
+	err := os.MkdirAll(stagingRoot, 0o777)
+	if err != nil {
+		panic(err)
+	}
+
 	boundaries, err := util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
 	if err != nil {
 		panic(err)
 	}
 
 	for _, boundary := range boundaries {
-		lt, err := util.CreateInitialDJAFSManifest(boundary.Path, *outputPath, boundary.IncludeSubdirs)
-		if err != nil {
-			panic(err)
-		}
 		subpath := strings.TrimPrefix(boundary.Path, *directoryPath)
-		newPath := filepath.Join(*outputPath, util.DataDir, subpath)
-		err = os.MkdirAll(newPath, 0o777)
+		boundaryStagingPath := filepath.Join(stagingRoot, subpath)
+		err = os.MkdirAll(boundaryStagingPath, 0o777)
 		if err != nil {
 			panic(err)
 		}
-		err = util.WriteJSONFile(filepath.Join(newPath, "lookups.djfl"), lt)
+
+		lt, err := util.CreateInitialDJAFSManifest(boundary.Path, boundaryStagingPath, boundary.IncludeSubdirs)
 		if err != nil {
 			panic(err)
 		}
-		metadata, err := lt.GenerateMetadata("")
+
+		djafsDataPath := filepath.Join(*outputPath, util.DataDir, subpath)
+		err = os.MkdirAll(djafsDataPath, 0o777)
 		if err != nil {
 			panic(err)
 		}
-		err = util.WriteJSONFile(filepath.Join(newPath, "metadata.djfm"), metadata)
+
+		err = util.WriteJSONFile(filepath.Join(djafsDataPath, "lookups.djfl"), lt)
+		if err != nil {
+			panic(err)
+		}
+
+		filesDjfZPath := filepath.Join(djafsDataPath, "files.djfz")
+		err = util.CompressHashed(boundaryStagingPath, filesDjfZPath)
+		if err != nil {
+			panic(err)
+		}
+
+		metadata, err := lt.GenerateMetadata(filesDjfZPath)
+		if err != nil {
+			panic(err)
+		}
+		err = util.WriteJSONFile(filepath.Join(djafsDataPath, "metadata.djfm"), metadata)
+		if err != nil {
+			panic(err)
+		}
+
+		err = os.RemoveAll(boundaryStagingPath)
 		if err != nil {
 			panic(err)
 		}
 	}
 
-	err = util.GCWorkDirs(filepath.Join(*outputPath, util.WorkDir))
-	if err != nil {
-		panic(err)
-	}
+	// err = util.GCWorkDirs(filepath.Join(*outputPath, util.WorkDir))
+	// if err != nil {
+	// 	panic(err)
+	// }
 
 }
