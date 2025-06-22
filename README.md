@@ -1,255 +1,510 @@
 # djafs - the Dendra JSON Archive File System
 
-(DeeJay-fs)
+**djafs** (DeeJay-fs) is a high-performance FUSE-based filesystem that provides compressed, content-addressable storage for JSON files with time-travel capabilities.
 
-## Background info
+## Table of Contents
 
-Original documentation on fuse:
-[fuse at nmsu](https://www.cs.nmsu.edu/~pfeiffer/fuse-tutorial/html/index.html)
+- [Overview](#overview)
+- [The Problem](#the-problem)
+- [Solution Architecture](#solution-architecture)
+- [FUSE Technology](#fuse-technology)
+- [System Design](#system-design)
+- [File Formats](#file-formats)
+- [Usage Examples](#usage-examples)
+- [Implementation Status](#implementation-status)
+- [Development Roadmap](#development-roadmap)
+- [Technical References](#technical-references)
 
-### Bazel example
+## Overview
 
-[link to hellofs docs](https://pkg.go.dev/bazil.org/fuse@v0.0.0-20200524192727-fb710f7dfd05/examples/hellofs)
-[link to gh repo](https://github.com/bazil/fuse/blob/fb710f7dfd05/examples/hellofs/hello.go)
-[Bazel ZipFS](https://github.com/bazil/zipfs)
+djafs solves the problem of efficiently storing and accessing large volumes of compressible JSON data while maintaining filesystem semantics and providing advanced features like point-in-time snapshots.
 
-### Blog Example
+### Key Features
 
-[link to blog](https://blog.trieoflogs.com/2021-05-25-fuse-filesystem-go/)
+- **Transparent Compression**: JSON files are automatically compressed without changing application interfaces
+- **Content-Addressable Storage**: Eliminates data duplication using SHA-256 hashing
+- **Time-Travel Snapshots**: View filesystem state at any point in time
+- **High Performance**: Optimized for both read and write operations
+- **Backup-Friendly**: Non-opaque storage format allows manual recovery
+- **FUSE-Based**: Standard filesystem interface compatible with all applications
 
-Note, the blog example is the one that will be followed when building
-the fuse driver. However, at early inspection, there's a notable bug
-in it: the inode counter doesn't use an atomic counter, but it should.
+### Use Cases
 
-## Problem
+- **Time-Series Data**: IoT sensor readings, metrics, logs
+- **Event Sourcing**: Application events and state changes
+- **Archive Storage**: Long-term retention of structured data
+- **Data Lakes**: Structured data storage with efficient compression
 
-The archive is currently a simple, file-backed system.
-Nested year/month/day folders separate json files.
-These json files are taking up far too much space, and are highly compressible.
-It would be great to store the files compressed, and decompress them
-on the fly when needed.
+## The Problem
 
-## Constraints
-
-Must haves:
-
-- As this is a filesystem, it needs to be performant
-  - We need to be able to access files quickly
-  - We need to be able to store files quickly
-- We shouldn't store files in an opaque format in case the driver breaks
-- We need an easily-backed-up system
-- Good documentation. See: README.md
-
-Nice to haves:
-
-- We would like to be able to see a snapshot of the archive
-  as it was for any given day
-- We would like the driver to be extensible such that file
-  creation can be blocked
-  - block creation of empty file on top of non-empty file
-
-## Architecture / Design
-
-### Similar work
-
-As with anything, let's use the same principles used elsewhere
-in software architecture.
-This architecture is similar to the following concepts:
-
-- influxdb write-through caching / garbage collection
-- inode / dirent scaffolding
-- garbage collection
-- content-addressable hashing (ipfs)
-- library of babel
-- heap / stack memory model
-- probably a lot more
-
-### Assumptions
-
-- To make things simpler, when viewing snapshots, we assume no time-series
-  data could have been generated for a date more than 24 hours in
-  the future from the snapshot date.
-
-### Design
-
-There are four notable pools of data which are relevant to djafs.
-
-1. FUSE Interface.
-   The interface will follow the exact same directory structure as what's
-   currently used, with nested directories of json.
-   One notable exception is that there will be one additional top-level
-   directory, "live" above the nested directories.
-   The mountpoint for the JSON Archive API will be the "live" directory.
-   At the same level as the "live" folder, will be a directory
-   called "snapshots".
-   Inside of snapshots, a library of babel-style directory tree
-   "exists" (is generated on-the-fly).
-   To see a snapshot of data for a given day, `cd` into the directory with
-   that date as the path (i.e. `cd snapshots/2022/07/13/data`)
-   As the actual data is not stored in the interface, the interface itself
-   can be on a host drive (only a mountpoint is required.)
-1. Data Backend.
-   The data backend follows the same directory structure as the current data,
-   but is gzipped at the weekly (or monthly) level.
-   The exact splitting level will require analysis to determine the optimal
-   tradeoff between memory, speed, and storage.
-   Packing more days of data into the same files will give better compression
-   and fewer real inodes, but will require more memory and CPU to
-   pack and unpack.
-   As the data itself is all zip files, no external software besides the
-   coreutils should be required to manually intervene if necessary.
-1. Lookup data.
-   When data is added to the archive, if the timestamp is used as the filename,
-   it may overwrite previous content, which makes snapshots impossible.
-   Instead, added files are hashed using SHA-256, and stored as `<HASH>.<ext>`.
-   Since the filename was the timestamp and had special meaning, the
-   correlation between the hashed file's name and timestamp
-   needs to be recorded.
-   Because there are potentially millions of files, this data should be
-   stored compressed as well.
-   A binary data format would work well for this, but breaks the rule of
-   "no external tools or data formats", as a corruption of the binary file
-   would result in data loss.
-   Instead, a tradeoff will be made, and the inode / dirent model is followed:
-   there is no global metadata file, instead, each gzip file contains its
-   own lookup table file.
-   The lookup table file will be JSON, and get compressed alongside the data,
-   into a file named `inode.djfl` (since it roughly corresponds to some of the
-   responsibilities an inode would have).
-   The lookup records will contain a list of pairings from the filenames
-   that should exist for a directory of data to the backing hashed files.
-   The lookup records will be arranged as an array of objects, containing
-   the filename, target, and modification date (as a unix timestamp)
-   for the record.
-   To parse the file properly, the array of data will be read in from
-   beginning to end, with newer records overriding the previous ones.
-   In the special case of a file deletion, the target will be the empty
-   string instead of a hashed file's name.
-   Notably, when a file is "modified", the original data is never overwritten,
-   as it is a hashed file; instead the new file is stored next to it and referenced.
-   To parse the file to a specific snapshot in time, the metadata file will be
-   parsed up until the first record which has a date after the snapshot date.
-   To reduce the number of entries in the metadata file, consecutive entries
-   for a given filename which point to the same hashed file target can have
-   the second entry eliminated since it's effectively a statement of "no change".
-1. Hot Cache.
-   Writing files to any filesystem can be slow if writes are synchronous,
-   especially if the filesystem in question is a hashing compression filesystem.
-   Additionally, the reading patterns of the filesystem are known to be
-   heavily sequential, so to optimize for CPU and memory, it makes sense to
-   cache the decompression artifacts.
-   An extra folder for reads and writes will be created alongside
-   the backing data for this purpose.
-   When a file is added to the archive, the direct file operations will only
-   add it to the hot cache folder, writing it through without
-   hashing or compressing.
-   Periodically, a "garbage collection" process will collect all newly added
-   files from the hot cache and bake them into the data backend by hashing
-   them, decompressing the relevant archive, adding an entry to the
-   metadata file, and recompressing the archive.
-   Notably, functionality for backups will be made available, which
-   temporarily disables the garbage collection procedure.
-   This is so that when an external process copies the backing
-   files somewhere else, there's not a moving target.
-   This functionality is preferred over building a backup solution into the
-   fuse driver itself because the backup solution may change over time, and
-   changing the backup logic would require taking down the driver
-   and bringing it back up.
-   Additionally, the chance of critical errors occurring increases exponentially
-   when a filesystem driver now must communicate over the internet.`
-   When a file is read from the archive, the zip file is decompressed and the
-   manifest is parsed as described above.
-   The destination location for the archive expansion is marked in an in-memory
-   data structure and scheduled for deletion in an LRU-style queue.
-
-### Filesystem Structure
-
-Compressed files use the extension `.djfz` (zip files)
-Lookup files will use the extension `.djfl` (json files)
-Metadata files will use the extension `.djfm` (json files)
-
-Here's how the file structure will look:
-
-The following tree output:
+Traditional approaches to storing JSON time-series data face several challenges:
 
 ```ascii
-.
-├── bin
-│   └── main.go
-├── cmd/
-│   ├── x.go
-│   ├── converter
-│   │   └── main.go
-│   ├── counter/
-│   │   ├── counter
-│   │   └── main.go
-│   └── uniconverter/
-│       └── main.go
-├── go.mod
-├── go.sum
-├── main.go
-├── Makefile
-├── README.md
-└── util/
-    ├── compress.go
-    ├── compress_test.go
-    ├── hasher.go
-    ├── inode.go
-    ├── metadata.go
-    ├── repack.go
-    ├── repack_test.go
-    ├── subfile.go
-    └── subfile_test.go
-
+Current Structure:
+archive/
+├── 2024/
+│   ├── 01/
+│   │   ├── 01/
+│   │   │   ├── sensor_001_1704067200.json  (12KB)
+│   │   │   ├── sensor_001_1704067260.json  (12KB)
+│   │   │   └── sensor_001_1704067320.json  (12KB)
+│   │   └── 02/
+│   └── 02/
+└── 2023/
 ```
 
-Would be transformed as follows (presuming the max is between 5-12):
+**Problems:**
+
+- **Storage Inefficiency**: JSON files are highly compressible but stored uncompressed
+- **Inode Exhaustion**: Millions of small files can exhaust filesystem inodes
+- **Backup Overhead**: Many small files slow down backup operations
+- **No Deduplication**: Identical or similar content is stored multiple times
+- **Limited Snapshots**: No easy way to view historical filesystem states
+
+## Solution Architecture
+
+djafs transforms the storage model while maintaining the same access patterns:
 
 ```ascii
-.
-├── lookups.djfl
-├── metadata.djfm
-├── files.djfz
-├── bin/
-│   ├── lookups.djfl
-│   ├── metadata.djfm
-│   └── files.djfz
-├── cmd/
-│   ├── lookups.djfl
-│   ├── metadata.djfm
-│   └── files.djfz
-└── util/
-    ├── lookups.djfl
-    ├── metadata.djfm
-    └── files.djfz
+FUSE Interface (what applications see):
+/mnt/djafs/
+├── live/                    <- Current active data
+│   ├── 2024/01/01/
+│   │   ├── sensor_001_1704067200.json
+│   │   ├── sensor_001_1704067260.json
+│   │   └── sensor_001_1704067320.json
+│   └── 2024/01/02/
+└── snapshots/               <- Time-travel interface
+    ├── 2024/01/01/
+    ├── 2024/01/02/
+    └── 2024/02/02/
+
+Backend Storage (actual disk layout):
+/data/djafs/
+├── hot_cache/               <- Write buffer
+├── archive_2024_01.djfz     <- Compressed archives
+├── archive_2024_02.djfz
+└── workdir/                 <- Content-addressable storage
+    ├── a1/
+    │   └── a1b2c3...def.json    <- Hashed files
+    └── b2/
+        └── b2c3d4...abc.json
 ```
 
-Notice:
+## FUSE Technology
 
-- All root files are always collapsed
-- All subdirectories are collapsed up until they hit the max filecap
-- Notice that the bin folder only had one file before, and now it has 3. This is a result of the following rules:
-  - Any time there are directories which are siblings to files.djfz, the files.djfz will only contain top-level files
-  - As a corollary, any time a Directory A contains Directory B and C, and sizeof(directory B) + sizeof(directory C) + files in A > max,
-    - Each subdirectory gets its own toplevel structure, regardless of true contents count
-- Finally, notice how x.go got folded into the same backing structure as its sibling subdirs
+### What is FUSE?
 
-Uncompressed metadata files will contain the following data for quick summary/metrics calculations:
+FUSE (Filesystem in Userspace) is a software interface that allows non-privileged users to create their own file systems without editing kernel code. It works by:
 
-- Version of djafs used to pack the archive (useful for migrations)
-- Last update (useful for timestamps)
-- Oldest file timestamp
-- Compressed file Size
-- Uncompressed file size
-- Count of Files
-- Count of Unique files
+1. **Kernel Module**: A thin kernel module that receives filesystem calls
+2. **User Space Daemon**: Your custom filesystem implementation
+3. **Protocol Bridge**: Communication between kernel and userspace via `/dev/fuse`
+
+### How djafs Uses FUSE
+
+When a user runs `cat /mnt/djafs/live/2024/01/01/sensor_001.json`:
+
+1. Kernel receives read() syscall
+2. FUSE kernel module forwards to djafs daemon
+3. djafs daemon:
+   a. Looks up file in lookup table
+   b. Finds hash: a1b2c3...def
+   c. Decompresses archive containing the file
+   d. Returns content to kernel
+4. Kernel returns data to application
+
+### FUSE Implementation (bazil.org/fuse)
+
+djafs uses the [bazil.org/fuse](https://github.com/bazil/fuse) library, a pure Go implementation of the FUSE protocol that doesn't rely on the C FUSE library.
+
+**Key Components:**
+
+- **fs.FS**: Root filesystem interface
+- **fs.Node**: Represents files and directories
+- **fs.Handle**: Represents opened files
+- **Lookup/Read/Write**: Core filesystem operations
+
+## System Design
+
+### Four Data Pools
+
+djafs architecture consists of four interconnected data storage systems:
+
+#### 1. FUSE Interface Layer
+
+The user-facing filesystem that maintains familiar directory structures:
+
+- **`/live/`**: Current active data with standard hierarchy
+- **`/snapshots/`**: Time-based views generated on-demand
+- **Virtual Directories**: Dynamically created based on lookup tables
+- **Standard Operations**: Full support for read, write, stat, readdir
+
+#### 2. Content-Addressable Storage (CAS)
+
+Files are stored by their SHA-256 hash to eliminate duplication:
+
+```ascii
+workdir/
+├── a1/
+│   ├── a1b2c3d4e5f6789abcdef012345.json    <- Original: sensor_001_1704067200.json
+│   └── a1f7e8d9c2b3a4f5e6d7c8b9a0f.json    <- Original: sensor_002_1704067200.json
+└── b2/
+    └── b2c3d4e5f6789abcdef012345a1b.json    <- Original: sensor_001_1704067260.json
+```
+
+**Benefits:**
+
+- **Automatic Deduplication**: Identical files stored only once
+- **Integrity Checking**: Hash verification prevents corruption
+- **Efficient Storage**: Only unique content consumes space
+
+#### 3. Compressed Archives
+
+Related files are grouped into compressed archives for optimal storage efficiency:
+
+```ascii
+archive_2024_01_week_1.djfz    <- ZIP archive containing:
+├── lookups.djfl               <- JSON lookup table
+├── metadata.djfm              <- Archive metadata
+├── a1b2c3d4e5f6789abcdef012345.json
+├── a1f7e8d9c2b3a4f5e6d7c8b9a0f.json
+└── b2c3d4e5f6789abcdef012345a1b.json
+```
+
+**Compression Strategy:**
+
+- **Time-Based Grouping**: Files from similar time periods compress better
+- **Configurable Periods**: Weekly, monthly, or custom grouping
+- **Standard ZIP Format**: No proprietary formats for maximum recoverability
+
+#### 4. Hot Cache System
+
+A write-through cache that optimizes write performance:
+
+```ascii
+hot_cache/
+├── incoming/                  <- New files land here first
+│   ├── sensor_001_1704067380.json
+│   └── sensor_002_1704067380.json
+└── staging/                   <- Files being processed by GC
+```
+
+**Write Flow:**
+
+1. New file written to `hot_cache/incoming/`
+2. Write completes immediately (fast response)
+3. Background garbage collector:
+   - Computes SHA-256 hash
+   - Moves to content-addressable storage
+   - Updates lookup tables
+   - Adds to compressed archive
+   - Removes from hot cache
+
+### Lookup Tables
+
+Lookup tables map human-readable filenames to content-addressable hashes:
+
+```json
+{
+  "entries": [
+    {
+      "name": "2024/01/01/sensor_001_1704067200.json",
+      "target": "a1b2c3d4e5f6789abcdef012345.json",
+      "size": 12484,
+      "modified": "2024-01-01T12:00:00Z",
+      "inode": 100001
+    },
+    {
+      "name": "2024/01/01/sensor_001_1704067260.json",
+      "target": "b2c3d4e5f6789abcdef012345a1b.json",
+      "size": 12490,
+      "modified": "2024-01-01T12:01:00Z",
+      "inode": 100002
+    }
+  ],
+  "sorted": true
+}
+```
+
+**Snapshot Functionality:**
+
+- Lookup tables are append-only logs
+- To view snapshots, read entries up to specific timestamp
+- Deleted files have empty `target` field
+- Modified files create new entries without deleting old content
+
+### Metadata Files
+
+Each archive includes metadata for performance optimization:
+
+```json
+{
+  "djafs_version": "1.0.0",
+  "compressed_size": 2457600,
+  "uncompressed_size": 8392704,
+  "total_file_count": 1440,
+  "target_file_count": 1200,
+  "oldest_file_ts": "2024-01-01T00:00:00Z",
+  "newest_file_ts": "2024-01-07T23:59:59Z"
+}
+```
+
+## File Formats
+
+### Extension Conventions
+
+- **`.djfz`**: Compressed archive files (ZIP format)
+- **`.djfl`**: JSON lookup table files
+- **`.djfm`**: JSON metadata files
+
+### Archive Structure
+
+Each `.djfz` file contains:
+
+```ascii
+archive_2024_01_week_1.djfz
+├── lookups.djfl              <- Lookup table for this archive
+├── metadata.djfm             <- Archive metadata
+├── <hash1>.json              <- Content-addressable files
+├── <hash2>.json
+└── <hashN>.json
+```
+
+## Quick Start
+
+### Prerequisites
+
+- Go 1.19 or later
+- FUSE support on your system:
+  - **Linux**: `sudo apt-get install fuse` or `sudo yum install fuse`
+  - **macOS**: Install [FUSE for macOS](https://osxfuse.github.io/)
+  - **FreeBSD**: FUSE is included in base system
+
+### Building and Running
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/dendra-fuse-djafs
+cd dendra-fuse-djafs
+
+# Build the filesystem
+go build -o djafs .
+
+# Create a mount point
+mkdir /tmp/djafs-mount
+
+# Mount the filesystem
+./djafs /tmp/djafs-mount
+
+# In another terminal, use the filesystem
+echo '{"temperature": 23.5, "timestamp": "2024-01-01T12:00:00Z"}' > /tmp/djafs-mount/live/2024/01/01/sensor.json
+cat /tmp/djafs-mount/live/2024/01/01/sensor.json
+
+# Unmount when done
+fusermount -u /tmp/djafs-mount  # Linux
+umount /tmp/djafs-mount         # macOS/FreeBSD
+```
+
+## Usage Examples
+
+### Basic Operations
+
+```bash
+# Mount the filesystem
+./djafs /mnt/djafs
+
+# Write a file (goes to hot cache)
+echo '{"sensor_id": "001", "value": 23.5}' > /mnt/djafs/live/2024/01/01/reading.json
+
+# Read the file (transparent decompression)
+cat /mnt/djafs/live/2024/01/01/reading.json
+
+# List current files
+ls -la /mnt/djafs/live/2024/01/01/
+
+# View snapshots
+ls /mnt/djafs/snapshots/
+ls /mnt/djafs/snapshots/2024-01-01T12:00:00Z/2024/01/01/
+```
+
+### Time-Travel Snapshots
+
+```bash
+# View filesystem as it was at noon on Jan 1st
+cd /mnt/djafs/snapshots/2024-01-01T12:00:00Z/
+ls 2024/01/01/                 # Only files that existed at that time
+
+# Compare different points in time
+diff /mnt/djafs/snapshots/2024-01-01T12:00:00Z/2024/01/01/data.json \
+     /mnt/djafs/snapshots/2024-01-01T18:00:00Z/2024/01/01/data.json
+```
+
+### Backup Operations
+
+```bash
+# Pause garbage collection for consistent backup
+killall -USR1 djafs
+
+# Backup the actual storage (much smaller than original)
+rsync -av /data/djafs/ backup_location/
+
+# Resume garbage collection
+killall -USR2 djafs
+```
+
+## Implementation Status
+
+### ✅ Completed Components
+
+- **Utility Functions** (`util/` package):
+
+  - SHA-256 hashing with content-addressable storage
+  - ZIP compression/decompression
+  - Lookup table management
+  - Metadata generation
+  - File counting and validation
+
+- **Core Data Structures**:
+  - `LookupEntry` and `LookupTable` types
+  - `Metadata` structure with JSON serialization
+  - DJFZ archive handling
+
+### 🔄 In Progress
+
+- **FUSE Filesystem Interface** (`main.go`):
+  - Basic FUSE mounting infrastructure
+  - Command-line interface
+  - Signal handling for graceful shutdown
+
+### ❌ Pending Implementation
+
+- **Complete FUSE Operations**:
+
+  - Directory listing (`ReadDir`)
+  - File lookup (`Lookup`)
+  - File reading (`Read`, `Open`)
+  - File writing (`Write`, `Create`)
+  - File metadata (`Attr`, `Getattr`)
+
+- **Snapshot System**:
+
+  - Virtual snapshot directory generation
+  - Time-based file filtering
+  - Snapshot browsing interface
+
+- **Hot Cache Management**:
+
+  - Background garbage collection
+  - Write-through caching
+  - Archive generation and compression
+
+- **Advanced Features**:
+  - Backup pause/resume functionality
+  - Performance monitoring
+  - Error recovery mechanisms
 
 ## Development Roadmap
 
-1. Build out "utility functions" and tests
-  a. Count all files under a subfolder until X
-  a. Metadata generator
-  a. sha256 renamer + lookup table creator
-1. Create loader
-1. Create unloader
-1. Create repacker
+### Phase 1: Core Filesystem ✅
+
+- [x] Utility functions and data structures
+- [x] SHA-256 hashing and content addressing
+- [x] ZIP compression/decompression
+- [x] Lookup table management
+- [x] Basic FUSE mounting
+
+### Phase 2: Basic Operations 🔄
+
+- [ ] Implement FUSE `Lookup` operation
+- [ ] Implement FUSE `Read` and `Open` operations
+- [ ] Implement FUSE `ReadDir` for directory listing
+- [ ] Implement FUSE `Attr` for file metadata
+- [ ] Basic file reading from archives
+
+### Phase 3: Write Operations
+
+- [ ] Implement hot cache system
+- [ ] Implement FUSE `Write` and `Create` operations
+- [ ] Background garbage collection process
+- [ ] Archive generation and compression
+- [ ] Lookup table updates
+
+### Phase 4: Snapshot System
+
+- [ ] Virtual snapshot directory generation
+- [ ] Time-based file filtering
+- [ ] Historical lookup table parsing
+- [ ] Snapshot browsing interface
+
+### Phase 5: Production Features
+
+- [ ] Backup pause/resume signals
+- [ ] Performance monitoring and metrics
+- [ ] Error recovery and fault tolerance
+- [ ] Configuration management
+- [ ] Comprehensive testing suite
+
+### Phase 6: Optimizations
+
+- [ ] Read caching and LRU eviction
+- [ ] Compression ratio optimization
+- [ ] Memory usage optimization
+- [ ] Concurrent operation support
+
+## Technical References
+
+### FUSE Documentation
+
+- [FUSE Tutorial by Joseph Pfeiffer](https://www.cs.nmsu.edu/~pfeiffer/fuse-tutorial/html/index.html) - Comprehensive FUSE development guide
+- [bazil.org/fuse Documentation](https://pkg.go.dev/bazil.org/fuse) - Go FUSE library documentation
+- [bazil.org/fuse Examples](https://github.com/bazil/fuse/tree/master/examples) - Example FUSE implementations
+
+### Reference Implementations
+
+- [hellofs](https://github.com/bazil/fuse/blob/master/examples/hellofs/hello.go) - Simple FUSE filesystem example
+- [zipfs](https://github.com/bazil/zipfs) - FUSE filesystem serving ZIP archives
+- [Writing Filesystems in Go with FUSE](https://blog.gopheracademy.com/advent-2014/fuse-zipfs/) - Detailed tutorial
+
+### Architecture Inspiration
+
+- **InfluxDB**: Write-through caching and garbage collection patterns
+- **IPFS**: Content-addressable storage design
+- **Git**: Object storage and content hashing
+- **ZFS**: Snapshot and deduplication concepts
+
+### Development Tools
+
+- [FUSE Debug Mode](https://github.com/bazil/fuse#debugging): Enable with `-o debug` for operation tracing
+- [Go Race Detector](https://golang.org/doc/articles/race_detector.html): Essential for concurrent FUSE operations
+- [Bazil Project](https://bazil.org/): Distributed filesystem using similar technologies
+
+## Performance Considerations
+
+### Write Performance
+
+- **Hot Cache**: New writes complete immediately to local cache
+- **Batched Compression**: Files are compressed in groups for better ratios
+- **Background Processing**: Garbage collection runs asynchronously
+
+### Read Performance
+
+- **Decompression Caching**: Recently accessed archives stay decompressed in memory
+- **Lookup Table Optimization**: Sorted lookup tables enable binary search
+- **Content Addressing**: Duplicate content is stored only once
+
+### Storage Efficiency
+
+- **Compression Ratios**: JSON typically compresses 5-10x with gzip
+- **Deduplication**: Identical files consume zero additional storage
+- **Time-Based Grouping**: Similar files compress better when archived together
+
+### Scalability Limits
+
+- **Memory Usage**: Proportional to number of open archives and cache size
+- **File Count**: Lookup tables support millions of entries efficiently
+- **Archive Size**: Individual archives should stay under 1GB for optimal performance
+
+---
+
+_djafs_ - Efficient, compressed, time-travel enabled storage for JSON archives.
