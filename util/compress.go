@@ -11,11 +11,7 @@ import (
 	"path/filepath"
 )
 
-var ErrNotDJFZExtension error
-
-func init() {
-	ErrNotDJFZExtension = errors.New("file path extension is not '.djfz'")
-}
+var ErrNotDJFZExtension = errors.New("file path extension is not '.djfz'")
 
 type DJFZ struct {
 	Path string
@@ -89,7 +85,7 @@ func CheckFileInDJFZ(path string, filename string) (bool, error) {
 	return false, nil
 }
 
-func CompressHashed(path string, dest string) error {
+func CompressDirectoryToDest(path string, dest string) error {
 	info, err := os.Stat(path)
 	if err != nil {
 		return err
@@ -104,15 +100,16 @@ func CompressHashed(path string, dest string) error {
 	}
 	w := zip.NewWriter(file)
 	defer w.Close()
-	fileSet, err := os.ReadDir(path)
+
+	// TODO:consider using a filewalker here instead of ReadDir
+	dirents, err := os.ReadDir(path)
 	if err != nil {
 		return err
 	}
-	for _, v := range fileSet {
+	for _, v := range dirents {
 		if v.IsDir() {
 			continue
 		}
-		//	fmt.Println("compressing: ", filepath.Join(path, v.Name()))
 		f, openErr := os.Open(filepath.Join(path, v.Name()))
 		if openErr != nil {
 			return openErr

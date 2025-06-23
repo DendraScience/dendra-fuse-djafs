@@ -34,26 +34,27 @@ func CopyToWorkDir(path, workDirPath, hash string) (string, error) {
 	gcLock.Lock()
 	defer gcLock.Unlock()
 	// create work dir
-	newName := HashPathFromHashInitial(hash, workDirPath) + filepath.Ext(path)
-	workspacePrefix, err := WorkspacePrefixFromHashPath(newName)
-	workspacePrefix = filepath.Join(workDirPath, workspacePrefix)
-	// fmt.Printf("workspacePrefix: %v\n", workspacePrefix)
-	if err != nil {
-		return "", err
-	}
-	err = os.MkdirAll(workspacePrefix, 0o755)
-	if err != nil {
-		return "", err
-	}
-	// copy file to work dir
-	newFile, err := os.Create(filepath.Join(workspacePrefix, newName))
-	if errors.Is(err, os.ErrExist) {
-	} else if err != nil {
-		return "", err
-	}
-	defer newFile.Close()
-	_, err = io.Copy(newFile, file)
-	return newName, err
+	//	newName := HashPathFromHashInitial(hash, workDirPath) + filepath.Ext(path)
+	//	workspacePrefix, err := WorkspacePrefixFromHashPath(newName)
+	//	workspacePrefix = filepath.Join(workDirPath, workspacePrefix)
+	//	// fmt.Printf("workspacePrefix: %v\n", workspacePrefix)
+	//	if err != nil {
+	//		return "", err
+	//	}
+	//	err = os.MkdirAll(workspacePrefix, 0o755)
+	//	if err != nil {
+	//		return "", err
+	//	}
+	//	// copy file to work dir
+	//	newFile, err := os.Create(filepath.Join(workspacePrefix, newName))
+	//	if errors.Is(err, os.ErrExist) {
+	//	} else if err != nil {
+	//		return "", err
+	//	}
+	//	defer newFile.Close()
+	//	_, err = io.Copy(newFile, file)
+	//	return newName, err
+	return "", nil
 }
 
 func ListWorkDirs(workDirPath string) ([]string, error) {
@@ -110,7 +111,7 @@ func GCWorkDirs(WorkDirPath string) error {
 
 	jobChan := make(chan string, 1)
 	errChan := make(chan error, runtime.NumCPU())
-	for i := 0; i < runtime.NumCPU(); i++ {
+	for range runtime.NumCPU() {
 		go worker(jobChan, errChan)
 	}
 	for _, workDir := range workDirs {
@@ -121,7 +122,7 @@ func GCWorkDirs(WorkDirPath string) error {
 
 	// Collect errors
 	var errs []error
-	for i := 0; i < runtime.NumCPU(); i++ {
+	for range runtime.NumCPU() {
 		if err := <-errChan; err != nil {
 			errs = append(errs, err)
 		}
@@ -173,5 +174,5 @@ func PackWorkDir(workDir string) error {
 		}
 	}
 	// fmt.Println("compressing work dir: ", workDir, " to zip: ", zipPath)
-	return CompressHashed(workDir, zipPath)
+	return CompressDirectoryToDest(workDir, zipPath)
 }

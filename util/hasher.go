@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -60,16 +61,16 @@ func (e LookupTable) Iterate(yield func(LookupEntry) bool) {
 	}
 }
 
-func (e LookupTable) Add(le LookupEntry) {
+func (e *LookupTable) Add(le LookupEntry) {
 	e.sorted = false
 	e.entries = append(e.entries, le)
 }
 
-func (e LookupTable) Remove(index int) error {
+func (e *LookupTable) Remove(index int) error {
 	if index < 0 || index >= len(e.entries) {
 		return fmt.Errorf("index out of range")
 	}
-	e.entries = append(e.entries[:index], e.entries[index+1:]...)
+	e.entries = slices.Delete(e.entries, index, index+1)
 	return nil
 }
 
@@ -97,9 +98,7 @@ func (e LookupTable) Less(i, j int) bool {
 	return e.entries[i].Modified.Before(e.entries[j].Modified)
 }
 
-// GetOldest returns the first modification entry, assuming
-// the Entries slice is sorted.
-// TODO ensure the entries are sorted during garbage collection
+// Returns the first modification entry, assuming the Entries slice is sorted.
 func (l LookupTable) GetOldestFileTS() time.Time {
 	if l.Len() == 0 {
 		return time.Time{}
@@ -128,6 +127,9 @@ func CreateFileLookupEntry(path, workDirPath string, initial bool) (LookupEntry,
 		return l, ErrExpectedFile
 	}
 	hash, err := GetFileHash(path)
+	if err != nil {
+		return l, err
+	}
 
 	_, err = CopyToWorkDir(path, workDirPath, hash)
 	l.Target = filepath.Join(hash, filepath.Ext(path))
@@ -183,7 +185,7 @@ func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTabl
 
 	// Start workers
 	wg.Add(runtime.NumCPU())
-	for i := 0; i < runtime.NumCPU(); i++ {
+	for range runtime.NumCPU() {
 		go initialLookupWorker(lwdChan, lookupEntryChan, errChan, &wg)
 	}
 
@@ -255,7 +257,7 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 	filesOnly := !includeSubdirs
 	lt := LookupTable{sorted: false, entries: []LookupEntry{}}
 
-	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
 		if filesOnly && info.IsDir() {
 			return filepath.SkipDir
 		}
@@ -280,12 +282,12 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 		lt.Add(le)
 		return nil
 	})
-	if err != nil {
-		return err
+	if walkErr != nil {
+		return fmt.Errorf("error walking path %s: %w", path, walkErr)
 	}
 	sort.Sort(lt)
 	manifest := filepath.Join(path, "lookup.djfl")
-	err = WriteJSONFile(manifest, lt)
+	err := WriteJSONFile(manifest, lt)
 	if err != nil {
 		return err
 	}
@@ -303,7 +305,7 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 	// TODO
 }
 
-func WriteJSONFile(path string, v interface{}) error {
+func WriteJSONFile(path string, v any) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -392,6 +394,7 @@ func ZipPrefixFromHashPath(path string) (string, error) {
 	return parts[0] + "-" + parts[1], nil
 }
 
+// Hashes a file and returns the hash as a hex string suitable for use in a filepath
 func GetFileHash(path string) (hash string, err error) {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -405,8 +408,12 @@ func GetFileHash(path string) (hash string, err error) {
 		return "", err
 	}
 	defer file.Close()
+	return GetHash(file)
+}
+
+func GetHash(r io.Reader) (string, error) {
 	h := sha256.New()
-	if _, err := io.Copy(h, file); err != nil {
+	if _, err := io.Copy(h, r); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("%x", h.Sum(nil)), nil

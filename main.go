@@ -82,8 +82,7 @@ func main() {
 		os.Exit(1)
 	}()
 
-	err = fs.Serve(c, archivefs.NewFS())
-
+	err = fs.Serve(c, djafs.NewFS())
 	if err != nil {
 		log.Fatal(err)
 	}
