@@ -43,6 +43,19 @@ type (
 	}
 )
 
+func (e *LookupTable) UnmarshalJSON(data []byte) error {
+	var aux struct {
+		Entries []LookupEntry `json:"entries"`
+		Sorted  bool          `json:"sorted"`
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	e.entries = aux.Entries
+	e.sorted = aux.Sorted
+	return nil
+}
+
 func (e LookupTable) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Entries []LookupEntry `json:"entries"`
@@ -257,7 +270,10 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 	filesOnly := !includeSubdirs
 	lt := LookupTable{sorted: false, entries: []LookupEntry{}}
 
-	walkErr := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
+	err := filepath.WalkDir(path, func(subpath string, info os.DirEntry, err error) error {
+		if err != nil {
+			return fmt.Errorf("error walking path %s: %w", subpath, err)
+		}
 		if filesOnly && info.IsDir() {
 			return filepath.SkipDir
 		}
@@ -282,12 +298,12 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 		lt.Add(le)
 		return nil
 	})
-	if walkErr != nil {
-		return fmt.Errorf("error walking path %s: %w", path, walkErr)
+	if err != nil {
+		return fmt.Errorf("error walking path %s: %w", path, err)
 	}
 	sort.Sort(lt)
 	manifest := filepath.Join(path, "lookup.djfl")
-	err := WriteJSONFile(manifest, lt)
+	err = WriteJSONFile(manifest, lt)
 	if err != nil {
 		return err
 	}

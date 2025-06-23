@@ -11,6 +11,7 @@ import (
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
 	_ "bazil.org/fuse/fs/fstestutil"
+	"github.com/dendrascience/dendra-archive-fuse/djafs"
 )
 
 const (
@@ -82,7 +83,7 @@ func main() {
 		os.Exit(1)
 	}()
 
-	err = fs.Serve(c, djafs.NewFS())
+	err = fs.Serve(c, djafs.NewFS(mountpoint))
 	if err != nil {
 		log.Fatal(err)
 	}
