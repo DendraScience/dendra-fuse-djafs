@@ -1,10 +1,13 @@
 package util
 
-import "sync"
+import (
+	"sync"
+)
 
 var (
 	highestInode uint64 = 0
-	inodeLock           = sync.Mutex{}
+	// could use atomic package for better performance, but this is simpler
+	inodeLock = sync.Mutex{}
 )
 
 func GetNewInode() uint64 {

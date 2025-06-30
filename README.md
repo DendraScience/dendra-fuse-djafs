@@ -234,6 +234,58 @@ Lookup tables map human-readable filenames to content-addressable hashes:
 - Deleted files have empty `target` field
 - Modified files create new entries without deleting old content
 
+### File Resolution Algorithm
+
+One of the most elegant aspects of djafs is how it resolves which zip archive contains a specific file **without requiring a master index**. The backing filesystem directory structure itself serves as the index.
+
+#### The "Dead End" Detection Method
+
+When looking for a file like `/sensors/location1/device5/reading.json`:
+
+1. **Walk down the backing filesystem**: `.data/sensors/location1/device5/`
+2. **Hit a "dead end"**: The directory doesn't exist (because it was a zip boundary)
+3. **Back up one level**: `.data/sensors/location1/` exists
+4. **Check the sibling lookup table**: `.data/sensors/location1/lookups.djfl`
+5. **Find the file entry**: The lookup table contains `device5/reading.json`
+
+#### Example Walkthrough
+
+**Original files:**
+
+```
+/sensors/location1/device5/reading.json
+/sensors/location1/device5/config.json
+/sensors/location1/device6/reading.json
+/sensors/location1/summary.json
+```
+
+**After zip boundary determination:**
+
+```
+.data/
+└── sensors/location1/
+    ├── lookups.djfl     <- Contains: device5/reading.json, device5/config.json,
+    │                                 device6/reading.json, summary.json
+    └── files.djfz       <- Compressed archive
+```
+
+**File lookup for `/sensors/location1/device5/reading.json`:**
+
+1. Try to access `.data/sensors/location1/device5/` → **Dead end!**
+2. Back up to `.data/sensors/location1/` → **Exists!**
+3. Open `.data/sensors/location1/lookups.djfl`
+4. Search for entry with `name: "device5/reading.json"`
+5. Extract from `files.djfz` using the target hash
+
+#### Why This Works
+
+- **Self-Indexing**: The filesystem structure eliminates the need for separate index files
+- **O(path-depth) Lookup**: Maximum directory traversals equal to path depth
+- **No Master Index**: Each boundary is self-contained with its own lookup table
+- **Intuitive**: The "dead end" naturally points to the exact lookup table containing your file
+
+This approach scales efficiently even with thousands of zip boundaries across a deep directory tree.
+
 ### Metadata Files
 
 Each archive includes metadata for performance optimization:
@@ -275,7 +327,7 @@ archive_2024_01_week_1.djfz
 
 ### Prerequisites
 
-- Go 1.19 or later
+- Go 1.24.4 or later
 - FUSE support on your system:
   - **Linux**: `sudo apt-get install fuse` or `sudo yum install fuse`
   - **macOS**: Install [FUSE for macOS](https://osxfuse.github.io/)
