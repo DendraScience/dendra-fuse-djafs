@@ -87,14 +87,14 @@ func main() {
 	go func() {
 		<-sigChan
 		log.Println("Received interrupt signal, shutting down...")
-		
+
 		// Stop filesystem gracefully
 		filesystem.Stop()
-		
+
 		// Unmount filesystem
 		fuse.Unmount(mountpoint)
 		c.Close()
-		
+
 		log.Println("Shutdown complete")
 		os.Exit(0)
 	}()

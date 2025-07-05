@@ -383,9 +383,9 @@ func (d *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 		}
 
 	default:
-		if strings.HasPrefix(d.path, "/live/") {
+		if after, ok := strings.CutPrefix(d.path, "/live/"); ok {
 			// List files in subdirectory
-			prefix := strings.TrimPrefix(d.path, "/live/") + "/"
+			prefix := after + "/"
 			entries, err := d.fs.getEntriesWithPrefix(prefix)
 			if err != nil {
 				return nil, err
@@ -1266,4 +1266,3 @@ func (fs *FS) getEntriesWithPrefixAtTime(prefix string, snapshotTime *time.Time)
 
 	return matchingEntries, err
 }
-

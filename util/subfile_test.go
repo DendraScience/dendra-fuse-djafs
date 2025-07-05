@@ -21,7 +21,7 @@ func TestDetermineZipBoundaries(t *testing.T) {
 		pathb2 := filepath.Join(patha, "b2")
 		os.Mkdir(pathb2, 0o755)
 
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			os.Create(filepath.Join(pathb1, fmt.Sprintf("%d", i)))
 			os.Create(filepath.Join(pathb2, fmt.Sprintf("%d", i)))
 		}
@@ -47,7 +47,7 @@ func TestDetermineZipBoundaries(t *testing.T) {
 		os.MkdirAll(pathc2, 0o755)
 		os.MkdirAll(pathc1, 0o755)
 
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			os.Create(filepath.Join(pathb1, fmt.Sprintf("%d", i)))
 			os.Create(filepath.Join(pathc2, fmt.Sprintf("%d", i)))
 			os.Create(filepath.Join(pathc1, fmt.Sprintf("%d", i)))
@@ -60,7 +60,6 @@ func TestDetermineZipBoundaries(t *testing.T) {
 		if len(boundaries) != 2 {
 			t.Errorf("Expected 2 subfolder roots, got %d", len(boundaries))
 		}
-
 	})
 	t.Run("Triple nested subfolders with a higher file", func(t *testing.T) {
 		dir := t.TempDir()
@@ -71,7 +70,7 @@ func TestDetermineZipBoundaries(t *testing.T) {
 		pathb2 := filepath.Join(patha, "b2")
 		os.Mkdir(pathb2, 0o755)
 
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			os.Create(filepath.Join(pathb1, fmt.Sprintf("%d", i)))
 			os.Create(filepath.Join(pathb2, fmt.Sprintf("%d", i)))
 		}
@@ -120,7 +119,7 @@ func TestCountSubfile(t *testing.T) {
 			for i := 0; i < c.FilesToCreate/10; i++ {
 				path = filepath.Join(path, fmt.Sprintf("%d", i))
 				os.Mkdir(path, 0o755)
-				for w := 0; w < 10; w++ {
+				for w := range 10 {
 					os.Create(filepath.Join(path, fmt.Sprintf("%d.file", w)))
 				}
 			}
@@ -175,7 +174,7 @@ func TestCountSubfile(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			file, err := os.Create(filepath.Join(pathb1, fmt.Sprintf("%d", i)))
 			totalCreated++
 			if err != nil {

@@ -25,43 +25,43 @@ func CopyToWorkDir(path, workDirPath, hash string) (string, error) {
 	if stat.IsDir() {
 		return "", ErrExpectedFile
 	}
-	
+
 	hashPath := HashPathFromHash(hash)
 	workspacePath := filepath.Join(workDirPath, hashPath)
-	
+
 	// Create directory structure if it doesn't exist
 	workspacePrefix, err := WorkspacePrefixFromHashPath(hashPath)
 	if err != nil {
 		return "", err
 	}
 	workspacePrefix = filepath.Join(workDirPath, workspacePrefix)
-	
+
 	gcLock.Lock()
 	defer gcLock.Unlock()
-	
+
 	err = os.MkdirAll(workspacePrefix, 0o755)
 	if err != nil {
 		return "", err
 	}
-	
+
 	// Check if file already exists (deduplication)
 	if _, err := os.Stat(workspacePath); err == nil {
 		return workspacePath, nil
 	}
-	
+
 	file, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
-	
+
 	// Copy file to work dir
 	newFile, err := os.Create(workspacePath)
 	if err != nil {
 		return "", err
 	}
 	defer newFile.Close()
-	
+
 	_, err = io.Copy(newFile, file)
 	return workspacePath, err
 }

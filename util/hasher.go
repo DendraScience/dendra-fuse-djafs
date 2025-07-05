@@ -28,7 +28,6 @@ var (
 	ErrInvalidHashPath   = fmt.Errorf("invalid hash path")
 )
 
-
 func RenameHashedFile(path string) (string, error) {
 	hash, err := GetFileHash(path)
 	if err != nil {
@@ -209,10 +208,10 @@ func WriteJSONFile(path string, v any) error {
 func ManifestLocationForPath(path string) (string, error) {
 	// Walk up the directory tree to find the appropriate lookup table
 	// This implements the "dead end" detection algorithm described in the README
-	
+
 	cleanPath := filepath.Clean(path)
 	currentPath := cleanPath
-	
+
 	for {
 		// Check if current directory exists in storage
 		if _, err := os.Stat(currentPath); os.IsNotExist(err) {
@@ -222,23 +221,23 @@ func ManifestLocationForPath(path string) (string, error) {
 				// Reached root without finding manifest
 				return "", fmt.Errorf("no manifest found for path %s", path)
 			}
-			
+
 			// Look for lookup table in parent directory
 			manifestPath := filepath.Join(parentPath, "lookups.djfl")
 			if _, err := os.Stat(manifestPath); err == nil {
 				return manifestPath, nil
 			}
-			
+
 			currentPath = parentPath
 			continue
 		}
-		
+
 		// Directory exists, check for lookup table here
 		manifestPath := filepath.Join(currentPath, "lookups.djfl")
 		if _, err := os.Stat(manifestPath); err == nil {
 			return manifestPath, nil
 		}
-		
+
 		// Move up one level
 		parentPath := filepath.Dir(currentPath)
 		if parentPath == currentPath {
@@ -247,7 +246,7 @@ func ManifestLocationForPath(path string) (string, error) {
 		}
 		currentPath = parentPath
 	}
-	
+
 	return "", fmt.Errorf("no manifest found for path %s", path)
 }
 
@@ -310,4 +309,3 @@ func GetHash(r io.Reader) (string, error) {
 	}
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
-

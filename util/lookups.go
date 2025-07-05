@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 )
+
 type (
 	LookupEntry struct {
 		FileSize int64     `json:"size"`     // size of the file in bytes
@@ -134,7 +135,6 @@ func CreateFileLookupEntry(path, workDirPath string, initial bool) (LookupEntry,
 	return l, err
 }
 
-
 // Does the opposite of GetOldestFileTS
 func (l LookupTable) GetNewestFileTS() time.Time {
 	if l.Len() == 0 {
@@ -176,7 +176,6 @@ func (l LookupTable) GetActiveFileCount() int {
 	return len(files)
 }
 
-
 func (l LookupTable) GetUncompressedSize() int {
 	total := 0
 	for e := range l.Iterate {
@@ -194,27 +193,28 @@ func (l *LookupTable) Collapse() {
 	if len(l.entries) <= 1 {
 		return
 	}
-	
+
 	// Ensure table is sorted by modification time
 	if !l.sorted {
 		l.Sort()
 	}
-	
+
 	// Map to track the latest entry for each file name
 	latestEntries := make(map[string]LookupEntry)
-	
+
 	// Process entries in chronological order
 	for _, entry := range l.entries {
 		latestEntries[entry.Name] = entry
 	}
-	
+
 	// Rebuild entries slice with only the latest version of each file
 	l.entries = make([]LookupEntry, 0, len(latestEntries))
 	for _, entry := range latestEntries {
 		l.entries = append(l.entries, entry)
 	}
-	
+
 	// Re-sort after collapse
 	l.sorted = false
 	l.Sort()
 }
+

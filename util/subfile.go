@@ -100,9 +100,7 @@ func DetermineZipBoundaries(path string, target int) ([]ZipBoundary, error) {
 
 	// Process subdirs recursively, since we're over target
 	if hasSubdirs {
-
 		for _, f := range files {
-
 			if f.IsDir() {
 				bounds, err := DetermineZipBoundaries(filepath.Join(path, f.Name()), target)
 				if err != nil {
