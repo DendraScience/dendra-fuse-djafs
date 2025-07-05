@@ -146,6 +146,7 @@ func (l LookupTable) GetNewestFileTS() time.Time {
 	return l.Get(l.Len() - 1).Modified
 }
 
+// GetTotalFileCount returns the total number of content-unique files in the lookup table
 func (l LookupTable) GetTotalFileCount() int {
 	files := make(map[string]bool)
 	for e := range l.Iterate {
@@ -154,6 +155,7 @@ func (l LookupTable) GetTotalFileCount() int {
 	return len(files)
 }
 
+// GetTargetFileCount returns the total number of name-unique files in the lookup table
 func (l LookupTable) GetTargetFileCount() int {
 	files := make(map[string]bool)
 	for e := range l.Iterate {
@@ -162,11 +164,18 @@ func (l LookupTable) GetTargetFileCount() int {
 	return len(files)
 }
 
-
-func (l LookupTable) AddFileEntry(e LookupEntry) LookupTable {
-	l.Add(e)
-	return l
+// GetActiveFileCount returns the total number of content-unique files in the lookup table that are still active (after deletions)
+func (l LookupTable) GetActiveFileCount() int {
+	files := make(map[string]bool)
+	for e := range l.Iterate {
+		files[e.Name] = true
+		if e.Target == "" {
+			files[e.Name] = false
+		}
+	}
+	return len(files)
 }
+
 
 func (l LookupTable) GetUncompressedSize() int {
 	total := 0
@@ -178,3 +187,34 @@ func (l LookupTable) GetUncompressedSize() int {
 
 // TODO add LookupTableCollapse function for combining consecutive entries
 // of the same name to target
+
+// LookupTableCollapse combines consecutive entries of the same name,
+// keeping only the most recent entry for each file
+func (l *LookupTable) Collapse() {
+	if len(l.entries) <= 1 {
+		return
+	}
+	
+	// Ensure table is sorted by modification time
+	if !l.sorted {
+		l.Sort()
+	}
+	
+	// Map to track the latest entry for each file name
+	latestEntries := make(map[string]LookupEntry)
+	
+	// Process entries in chronological order
+	for _, entry := range l.entries {
+		latestEntries[entry.Name] = entry
+	}
+	
+	// Rebuild entries slice with only the latest version of each file
+	l.entries = make([]LookupEntry, 0, len(latestEntries))
+	for _, entry := range latestEntries {
+		l.entries = append(l.entries, entry)
+	}
+	
+	// Re-sort after collapse
+	l.sorted = false
+	l.Sort()
+}

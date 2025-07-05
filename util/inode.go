@@ -28,5 +28,8 @@ func Set(inode uint64) {
 }
 
 func FileNameFromInode(inode uint64) string {
+	// This function would need a global inode-to-filename mapping
+	// For now, return empty string as this requires a more complex implementation
+	// involving a global registry of all files and their inodes
 	return ""
 }

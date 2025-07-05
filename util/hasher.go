@@ -207,7 +207,48 @@ func WriteJSONFile(path string, v any) error {
 }
 
 func ManifestLocationForPath(path string) (string, error) {
-	return "", nil
+	// Walk up the directory tree to find the appropriate lookup table
+	// This implements the "dead end" detection algorithm described in the README
+	
+	cleanPath := filepath.Clean(path)
+	currentPath := cleanPath
+	
+	for {
+		// Check if current directory exists in storage
+		if _, err := os.Stat(currentPath); os.IsNotExist(err) {
+			// Hit a "dead end" - back up one level
+			parentPath := filepath.Dir(currentPath)
+			if parentPath == currentPath {
+				// Reached root without finding manifest
+				return "", fmt.Errorf("no manifest found for path %s", path)
+			}
+			
+			// Look for lookup table in parent directory
+			manifestPath := filepath.Join(parentPath, "lookups.djfl")
+			if _, err := os.Stat(manifestPath); err == nil {
+				return manifestPath, nil
+			}
+			
+			currentPath = parentPath
+			continue
+		}
+		
+		// Directory exists, check for lookup table here
+		manifestPath := filepath.Join(currentPath, "lookups.djfl")
+		if _, err := os.Stat(manifestPath); err == nil {
+			return manifestPath, nil
+		}
+		
+		// Move up one level
+		parentPath := filepath.Dir(currentPath)
+		if parentPath == currentPath {
+			// Reached root
+			break
+		}
+		currentPath = parentPath
+	}
+	
+	return "", fmt.Errorf("no manifest found for path %s", path)
 }
 
 func HashFromHashPath(path string) (string, error) {

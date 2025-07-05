@@ -3,3 +3,7 @@ dendra-archive-fuse
 bin/bin
 dendra-fuse-djafs
 redir
+.crush
+converter
+validator
+*.md

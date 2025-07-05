@@ -25,36 +25,45 @@ func CopyToWorkDir(path, workDirPath, hash string) (string, error) {
 	if stat.IsDir() {
 		return "", ErrExpectedFile
 	}
+	
+	hashPath := HashPathFromHash(hash)
+	workspacePath := filepath.Join(workDirPath, hashPath)
+	
+	// Create directory structure if it doesn't exist
+	workspacePrefix, err := WorkspacePrefixFromHashPath(hashPath)
+	if err != nil {
+		return "", err
+	}
+	workspacePrefix = filepath.Join(workDirPath, workspacePrefix)
+	
+	gcLock.Lock()
+	defer gcLock.Unlock()
+	
+	err = os.MkdirAll(workspacePrefix, 0o755)
+	if err != nil {
+		return "", err
+	}
+	
+	// Check if file already exists (deduplication)
+	if _, err := os.Stat(workspacePath); err == nil {
+		return workspacePath, nil
+	}
+	
 	file, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
-	// create work dir
-	gcLock.Lock()
-	defer gcLock.Unlock()
-	// create work dir
-	//	newName := HashPathFromHashInitial(hash, workDirPath) + filepath.Ext(path)
-	//	workspacePrefix, err := WorkspacePrefixFromHashPath(newName)
-	//	workspacePrefix = filepath.Join(workDirPath, workspacePrefix)
-	//	// fmt.Printf("workspacePrefix: %v\n", workspacePrefix)
-	//	if err != nil {
-	//		return "", err
-	//	}
-	//	err = os.MkdirAll(workspacePrefix, 0o755)
-	//	if err != nil {
-	//		return "", err
-	//	}
-	//	// copy file to work dir
-	//	newFile, err := os.Create(filepath.Join(workspacePrefix, newName))
-	//	if errors.Is(err, os.ErrExist) {
-	//	} else if err != nil {
-	//		return "", err
-	//	}
-	//	defer newFile.Close()
-	//	_, err = io.Copy(newFile, file)
-	//	return newName, err
-	return "", nil
+	
+	// Copy file to work dir
+	newFile, err := os.Create(workspacePath)
+	if err != nil {
+		return "", err
+	}
+	defer newFile.Close()
+	
+	_, err = io.Copy(newFile, file)
+	return workspacePath, err
 }
 
 func ListWorkDirs(workDirPath string) ([]string, error) {
