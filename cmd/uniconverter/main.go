@@ -1,12 +1,14 @@
 package main
 
 import (
-	"flag"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/fang"
 	"github.com/dendrascience/dendra-archive-fuse/util"
+	"github.com/spf13/cobra"
 )
 
 // This utility allows the user to convert a directory tree
@@ -31,34 +33,49 @@ import (
 //
 // All actual files are stored in the .data folder, which is flat.
 
+var rootCmd = &cobra.Command{
+	Use:   "uniconverter",
+	Short: "Convert a directory tree into a compliant djafs filesystem",
+	Long: `uniconverter transforms an existing JSON directory structure into a djafs filesystem.
+
+The filesystem is then ready to be mounted and used. This tool processes the directory
+tree and creates the necessary data structures for efficient content-addressable storage.`,
+	Run: runConverter,
+}
+
 var (
-	outputPath         = flag.String("o", "", "The output path for the filesystem.")
-	thresholdSize      = flag.Int("s", util.GlobalModulus, "The threshold size for the filesystem.")
-	thresholdTolerance = flag.Int("t", 1, "The threshold tolerance for the filesystem.")
-	directoryPath      = flag.String("d", "", "The directory path for the filesystem.")
+	outputPath         string
+	thresholdSize      int
+	thresholdTolerance int
+	directoryPath      string
 )
 
-func main() {
-	flag.Parse()
-	if *outputPath == "" || *directoryPath == "" {
-		flag.CommandLine.Usage()
-		os.Exit(1)
-	}
+func init() {
+	rootCmd.Flags().StringVarP(&outputPath, "output", "o", "", "The output path for the filesystem (required)")
+	rootCmd.Flags().IntVarP(&thresholdSize, "size", "s", util.GlobalModulus, "The threshold size for the filesystem")
+	rootCmd.Flags().IntVarP(&thresholdTolerance, "tolerance", "t", 1, "The threshold tolerance for the filesystem")
+	rootCmd.Flags().StringVarP(&directoryPath, "directory", "d", "", "The directory path for the filesystem (required)")
+	
+	rootCmd.MarkFlagRequired("output")
+	rootCmd.MarkFlagRequired("directory")
+}
+
+func runConverter(cmd *cobra.Command, args []string) {
 	// Create the filesystem.
 	// The filesystem is created at the output path.
-	os.MkdirAll(*outputPath, 0o777)
-	boundaries, err := util.DetermineZipBoundaries(*directoryPath, *thresholdSize)
+	os.MkdirAll(outputPath, 0o777)
+	boundaries, err := util.DetermineZipBoundaries(directoryPath, thresholdSize)
 	if err != nil {
 		panic(err)
 	}
 
 	for _, boundary := range boundaries {
-		lt, err := util.CreateInitialDJAFSManifest(boundary.Path, *outputPath, boundary.IncludeSubdirs)
+		lt, err := util.CreateInitialDJAFSManifest(boundary.Path, outputPath, boundary.IncludeSubdirs)
 		if err != nil {
 			panic(err)
 		}
-		subpath := strings.TrimPrefix(boundary.Path, *directoryPath)
-		newPath := filepath.Join(*outputPath, util.DataDir, subpath)
+		subpath := strings.TrimPrefix(boundary.Path, directoryPath)
+		newPath := filepath.Join(outputPath, util.DataDir, subpath)
 		err = os.MkdirAll(newPath, 0o777)
 		if err != nil {
 			panic(err)
@@ -77,8 +94,14 @@ func main() {
 		}
 	}
 
-	err = util.GCWorkDirs(filepath.Join(*outputPath, util.WorkDir))
+	err = util.GCWorkDirs(filepath.Join(outputPath, util.WorkDir))
 	if err != nil {
 		panic(err)
+	}
+}
+
+func main() {
+	if err := fang.Execute(context.Background(), rootCmd); err != nil {
+		os.Exit(1)
 	}
 }

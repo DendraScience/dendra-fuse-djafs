@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	
+	"github.com/dendrascience/dendra-archive-fuse/version"
 )
 
 type Metadata struct {
@@ -19,7 +21,7 @@ type Metadata struct {
 }
 
 func GetVersion() string {
-	return "development"
+	return version.GetVersion()
 }
 
 // TODO compressed size can't be done until the compression can take place

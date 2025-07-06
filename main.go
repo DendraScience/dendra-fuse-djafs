@@ -1,68 +1,54 @@
 package main
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"runtime/debug"
 
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
 	_ "bazil.org/fuse/fs/fstestutil"
+	"github.com/charmbracelet/fang"
 	"github.com/dendrascience/dendra-archive-fuse/djafs"
+	"github.com/dendrascience/dendra-archive-fuse/version"
+	"github.com/spf13/cobra"
 )
 
-const (
-	SemVer  string = "1.0.0"
-	Package string = "dendra_archive_fuse"
-)
+var rootCmd = &cobra.Command{
+	Use:   "djafs STORAGE_PATH MOUNTPOINT",
+	Short: "Mount a djafs filesystem",
+	Long: `djafs is a FUSE-based filesystem for compressed, content-addressable JSON storage.
 
-var (
-	hostname string
-	version  = flag.Bool("version", false, "Get version string and exit")
-)
+STORAGE_PATH is the path to the djafs storage directory.
+MOUNTPOINT is the directory where the filesystem will be mounted.`,
+	Args: func(cmd *cobra.Command, args []string) error {
+		versionFlag, _ := cmd.Flags().GetBool("version")
+		if versionFlag {
+			return nil // Skip argument validation for version flag
+		}
+		return cobra.ExactArgs(2)(cmd, args)
+	},
+	Run: runMount,
+}
 
 func init() {
-	flag.Parse()
-	GitCommit := commit()
-	if GitCommit == "" {
-		log.Fatalf("Binary built improperly. Version variables not set!")
-	}
-	fmt.Printf("%s build commit: %s\n", Package, GitCommit)
+	rootCmd.Flags().BoolP("version", "v", false, "Show version information and exit")
+}
 
-	if *version {
+func runMount(cmd *cobra.Command, args []string) {
+	versionFlag, _ := cmd.Flags().GetBool("version")
+	if versionFlag {
+		version.PrintVersion("djafs")
 		os.Exit(0)
-	} else {
-		fmt.Printf("Initialization success...\n")
 	}
-}
 
-func commit() string {
-	Commit := func() string {
-		if info, ok := debug.ReadBuildInfo(); ok {
-			for _, setting := range info.Settings {
-				if setting.Key == "vcs.revision" {
-					return setting.Value
-				}
-			}
-		}
-		return ""
-	}()
-	return Commit
-}
+	// Print version info on startup
+	fmt.Printf("djafs %s starting...\n", version.GetFullVersion())
 
-func main() {
-	flag.Usage = help
-	flag.Parse()
-
-	if flag.NArg() != 2 {
-		help()
-		os.Exit(2)
-	}
-	storagePath := flag.Arg(0)
-	mountpoint := flag.Arg(1)
+	storagePath := args[0]
+	mountpoint := args[1]
 
 	// Ensure storage directory exists
 	if err := os.MkdirAll(storagePath, 0755); err != nil {
@@ -99,18 +85,15 @@ func main() {
 		os.Exit(0)
 	}()
 
-	log.Printf("djafs mounted at %s (storage: %s)", mountpoint, storagePath)
+	log.Printf("djafs %s mounted at %s (storage: %s)", version.GetVersion(), mountpoint, storagePath)
 	err = fs.Serve(c, filesystem)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func help() {
-	fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "  %s STORAGE_PATH MOUNTPOINT\n", os.Args[0])
-	fmt.Fprintf(os.Stderr, "\nArguments:\n")
-	fmt.Fprintf(os.Stderr, "  STORAGE_PATH   Path to djafs storage directory\n")
-	fmt.Fprintf(os.Stderr, "  MOUNTPOINT     Directory to mount the filesystem\n")
-	flag.PrintDefaults()
+func main() {
+	if err := fang.Execute(context.Background(), rootCmd); err != nil {
+		os.Exit(1)
+	}
 }
