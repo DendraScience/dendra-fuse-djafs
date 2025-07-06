@@ -9,14 +9,9 @@ LDFLAGS = -X github.com/dendrascience/dendra-archive-fuse/version.Version=$(VERS
           -X github.com/dendrascience/dendra-archive-fuse/version.Date=$(DATE)
 
 # Build targets
-main: djafs-bin
 
-djafs-bin: *.go internal/cmd/*.go version/*.go djafs/*.go util/*.go
+djafs: *.go internal/cmd/*.go version/*.go djafs/*.go util/*.go
 	go build -ldflags "$(LDFLAGS)" -o djafs-bin .
-
-djafs: djafs-bin
-
-all: djafs-bin
 
 clean:  
 	@printf "Cleaning up \e[32mall binaries\e[39m...\n"
@@ -46,6 +41,6 @@ dev-build:
 # Release targets
 release: clean
 	@echo "Building release versions..."
-	@$(MAKE) all
+	@$(MAKE) djafs
 
-.PHONY: main djafs all clean install vet test dev-build release
+.PHONY: djafs clean install vet test dev-build release
