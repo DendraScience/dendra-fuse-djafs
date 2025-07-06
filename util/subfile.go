@@ -8,6 +8,8 @@ import (
 
 var ErrExpectedDirectory = errors.New("expected directory but got file")
 
+// CountSubfile counts the number of files in a directory and checks if it exceeds the target.
+// It returns the count, whether it's over the target, and any error encountered.
 func CountSubfile(path string, target int) (count int, isOverTarget bool, err error) {
 	var info os.FileInfo
 	info, err = os.Stat(path)

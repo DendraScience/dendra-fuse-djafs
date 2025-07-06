@@ -17,6 +17,8 @@ var (
 	DataDir = ".data"
 )
 
+// CopyToWorkDir copies a file to the work directory with the specified hash as filename.
+// It validates that the source is a file (not directory) and returns the destination path.
 func CopyToWorkDir(path, workDirPath, hash string) (string, error) {
 	stat, err := os.Stat(path)
 	if err != nil {
@@ -66,6 +68,8 @@ func CopyToWorkDir(path, workDirPath, hash string) (string, error) {
 	return workspacePath, err
 }
 
+// ListWorkDirs returns a list of all work directories found in the work directory path.
+// It scans for top-level directories that contain files to be processed.
 func ListWorkDirs(workDirPath string) ([]string, error) {
 	topLevel, err := filepath.Glob(filepath.Join(WorkDir, "*"))
 	if err != nil {
@@ -82,6 +86,8 @@ func ListWorkDirs(workDirPath string) ([]string, error) {
 	return workDirs, nil
 }
 
+// WorkDirPathToZipPath converts a work directory path to the corresponding ZIP archive path.
+// It removes the work directory prefix and formats the path for archive naming.
 func WorkDirPathToZipPath(workDir string) string {
 	workDir = filepath.Clean(workDir)
 	wd := strings.TrimPrefix(workDir, WorkDir)
@@ -107,6 +113,8 @@ func worker(jobChan chan string, errChan chan error) error {
 	return nil
 }
 
+// GCWorkDirs performs garbage collection on work directories by packing them into archives.
+// It processes all work directories concurrently and uses a lock to prevent concurrent execution.
 func GCWorkDirs(WorkDirPath string) error {
 	gcLock.Lock()
 	defer gcLock.Unlock()
@@ -145,6 +153,8 @@ func GCWorkDirs(WorkDirPath string) error {
 	return nil
 }
 
+// PackWorkDir packs a work directory into a ZIP archive.
+// It checks if an existing archive exists and merges the contents if necessary.
 func PackWorkDir(workDir string) error {
 	// fmt.Println("workDir: ", workDir)
 	zipPath := WorkDirPathToZipPath(workDir)

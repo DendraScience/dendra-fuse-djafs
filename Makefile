@@ -11,29 +11,23 @@ LDFLAGS = -X github.com/dendrascience/dendra-archive-fuse/version.Version=$(VERS
 # Build targets
 main: djafs-bin
 
-djafs-bin: *.go version/*.go djafs/*.go util/*.go
+djafs-bin: *.go internal/cmd/*.go version/*.go djafs/*.go util/*.go
 	go build -ldflags "$(LDFLAGS)" -o djafs-bin .
 
 djafs: djafs-bin
 
-converter: cmd/uniconverter/*.go version/*.go util/*.go
-	go build -ldflags "$(LDFLAGS)" -o converter ./cmd/uniconverter
-
-validator: cmd/validator/*.go version/*.go util/*.go
-	go build -ldflags "$(LDFLAGS)" -o validator ./cmd/validator
-
-all: djafs-bin converter validator
+all: djafs-bin
 
 clean:  
 	@printf "Cleaning up \e[32mall binaries\e[39m...\n"
 	rm -f djafs-bin converter validator
 	rm -f main dendra-archive-fuse
 	rm -f *.zip
+	@# Only remove djafs if it's a file, not a directory
+	@if [ -f djafs ]; then rm -f djafs; fi
 
 install: clean all
 	mv djafs-bin "$$GOPATH/bin/djafs"
-	mv converter "$$GOPATH/bin/"
-	mv validator "$$GOPATH/bin/"
 
 vet: 
 	@echo "Running go vet..."
@@ -54,4 +48,4 @@ release: clean
 	@echo "Building release versions..."
 	@$(MAKE) all
 
-.PHONY: main djafs converter validator all clean install vet test dev-build release
+.PHONY: main djafs all clean install vet test dev-build release

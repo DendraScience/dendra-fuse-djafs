@@ -104,6 +104,9 @@ func (l LookupTable) GetOldestFileTS() time.Time {
 	return l.Get(0).Modified
 }
 
+// CreateFileLookupEntry creates a lookup table entry for a file at the specified path.
+// It calculates the file hash, copies it to the work directory if initial is true,
+// and returns a LookupEntry with all necessary metadata.
 func CreateFileLookupEntry(path, workDirPath string, initial bool) (LookupEntry, error) {
 	var l LookupEntry
 	info, err := os.Lstat(path)

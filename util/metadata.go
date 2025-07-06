@@ -20,6 +20,8 @@ type Metadata struct {
 	UncompressedSize int       `json:"uncompressed_size"`
 }
 
+// GetVersion returns the current djafs version string.
+// It delegates to the version package to get the version information.
 func GetVersion() string {
 	return version.GetVersion()
 }

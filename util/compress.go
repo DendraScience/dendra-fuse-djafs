@@ -17,6 +17,8 @@ type DJFZ struct {
 	Path string
 }
 
+// NewDJFZ creates a new DJFZ instance for the given file path.
+// It validates that the path has a .djfz extension and returns an error if not.
 func NewDJFZ(path string) (DJFZ, error) {
 	if filepath.Ext(path) != "djfz" {
 		return DJFZ{}, ErrNotDJFZExtension
@@ -42,7 +44,8 @@ func NewDJFZ(path string) (DJFZ, error) {
 //	return lt, err
 //}
 
-// assumes that the path is the name of a djfz file
+// LookupFromDJFZ extracts and returns the lookup table from a DJFZ archive file.
+// It opens the .djfz file as a ZIP archive and reads the lookups.djfl file within it.
 func LookupFromDJFZ(path string) (LookupTable, error) {
 	if filepath.Ext(path) != "djfz" {
 		return LookupTable{}, ErrNotDJFZExtension
@@ -62,6 +65,8 @@ func LookupFromDJFZ(path string) (LookupTable, error) {
 	return lt, err
 }
 
+// CountFilesInDJFZ returns the number of files contained in a DJFZ archive.
+// It opens the archive and counts the entries in the ZIP file.
 func CountFilesInDJFZ(path string) (int, error) {
 	zrc, err := zip.OpenReader(path)
 	if err != nil {
@@ -71,6 +76,8 @@ func CountFilesInDJFZ(path string) (int, error) {
 	return len(zrc.File), nil
 }
 
+// CheckFileInDJFZ checks whether a specific filename exists within a DJFZ archive.
+// It returns true if the file is found, false otherwise.
 func CheckFileInDJFZ(path string, filename string) (bool, error) {
 	zrc, err := zip.OpenReader(path)
 	if err != nil {
@@ -85,6 +92,8 @@ func CheckFileInDJFZ(path string, filename string) (bool, error) {
 	return false, nil
 }
 
+// CompressDirectoryToDest compresses an entire directory into a ZIP archive at the destination path.
+// It validates that the source path is a directory and creates a new ZIP file containing all directory contents.
 func CompressDirectoryToDest(path string, dest string) error {
 	info, err := os.Stat(path)
 	if err != nil {
@@ -128,6 +137,8 @@ func CompressDirectoryToDest(path string, dest string) error {
 	return err
 }
 
+// ZipInside creates a ZIP archive named "files.djfz" inside the specified directory.
+// If filesOnly is true, it only includes files (not subdirectories) in the archive.
 func ZipInside(path string, filesOnly bool) error {
 	filename := "files.djfz"
 

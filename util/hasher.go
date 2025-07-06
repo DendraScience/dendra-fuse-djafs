@@ -28,6 +28,8 @@ var (
 	ErrInvalidHashPath   = fmt.Errorf("invalid hash path")
 )
 
+// RenameHashedFile renames a file to its content hash with the original extension.
+// It calculates the SHA-256 hash of the file content and renames the file accordingly.
 func RenameHashedFile(path string) (string, error) {
 	hash, err := GetFileHash(path)
 	if err != nil {
@@ -58,6 +60,9 @@ func initialLookupWorker(lwd <-chan lookupWorkerData, c chan<- LookupEntry, errC
 	}
 }
 
+// CreateInitialDJAFSManifest creates a lookup table manifest for all files in the specified path.
+// It processes files concurrently, calculates their hashes, and creates lookup entries.
+// If filesOnly is true, it only processes files (not subdirectories).
 func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTable, error) {
 	if output == "" {
 		output = WorkDir
@@ -141,6 +146,9 @@ func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTabl
 	return lt, nil
 }
 
+// CreateDJAFSArchive creates a complete DJFZ archive from a directory path.
+// It generates a manifest, compresses the directory, and creates the final archive.
+// If includeSubdirs is true, subdirectories are included in the archive.
 func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 	filesOnly := !includeSubdirs
 	lt := LookupTable{sorted: false, entries: []LookupEntry{}}
@@ -196,6 +204,8 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 	// TODO
 }
 
+// WriteJSONFile writes any value as JSON to the specified file path.
+// It creates the file and encodes the value using the standard JSON encoder.
 func WriteJSONFile(path string, v any) error {
 	f, err := os.Create(path)
 	if err != nil {
@@ -205,6 +215,9 @@ func WriteJSONFile(path string, v any) error {
 	return json.NewEncoder(f).Encode(v)
 }
 
+// ManifestLocationForPath finds the appropriate lookup table manifest file for a given path.
+// It implements a "dead end" detection algorithm by walking up the directory tree
+// to find the closest manifest file that should contain the path's lookup information.
 func ManifestLocationForPath(path string) (string, error) {
 	// Walk up the directory tree to find the appropriate lookup table
 	// This implements the "dead end" detection algorithm described in the README
@@ -250,6 +263,8 @@ func ManifestLocationForPath(path string) (string, error) {
 	return "", fmt.Errorf("no manifest found for path %s", path)
 }
 
+// HashFromHashPath extracts the original hash from a hash-based file path.
+// It expects a path in the format "prefix-hash-suffix" and returns the hash portion.
 func HashFromHashPath(path string) (string, error) {
 	parts := strings.Split(path, "-")
 	if len(parts) != 3 {
@@ -258,6 +273,9 @@ func HashFromHashPath(path string) (string, error) {
 	return parts[2], nil
 }
 
+// HashPathFromHash generates a hierarchical directory path from a content hash.
+// It uses color hashing to distribute files across directories and creates a path
+// in the format "first-second-hash" for efficient storage organization.
 func HashPathFromHash(hash string) string {
 	hInt := colorhash.HashString(hash)
 	hInt = hInt % 1000
@@ -269,6 +287,8 @@ func HashPathFromHash(hash string) string {
 	return fmt.Sprintf("%d-%05d-%s", first, second, third)
 }
 
+// WorkspacePrefixFromHashPath extracts the workspace directory prefix from a hash path.
+// It returns the first two components of the hash path as a directory path.
 func WorkspacePrefixFromHashPath(path string) (string, error) {
 	parts := strings.Split(path, "-")
 	if len(parts) < 3 {
@@ -277,6 +297,8 @@ func WorkspacePrefixFromHashPath(path string) (string, error) {
 	return filepath.Join(parts[0], parts[1]), nil
 }
 
+// ZipPrefixFromHashPath extracts the ZIP archive prefix from a hash path.
+// It returns the first two components joined with a hyphen for archive naming.
 func ZipPrefixFromHashPath(path string) (string, error) {
 	parts := strings.Split(path, "-")
 	if len(parts) < 3 {
@@ -302,6 +324,8 @@ func GetFileHash(path string) (hash string, err error) {
 	return GetHash(file)
 }
 
+// GetHash calculates the SHA-256 hash of data from an io.Reader.
+// It returns the hash as a hexadecimal string.
 func GetHash(r io.Reader) (string, error) {
 	h := sha256.New()
 	if _, err := io.Copy(h, r); err != nil {
