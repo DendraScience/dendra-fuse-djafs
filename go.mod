@@ -5,6 +5,7 @@ go 1.25
 require (
 	bazil.org/fuse v0.0.0-20230120002735-62a210ff1fd5
 	github.com/charmbracelet/fang v0.4.4
+	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.10.2
 	github.com/taigrr/colorhash v0.5.0
 )

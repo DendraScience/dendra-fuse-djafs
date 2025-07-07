@@ -42,17 +42,20 @@ Use subcommands to perform different operations:
 	convertCmd := NewConvertCmd()
 	validateCmd := NewValidateCmd()
 	countCmd := NewCountCmd()
+	seedCmd := NewSeedCmd()
 
 	mountCmd.GroupID = groupFilesystem
 	countCmd.GroupID = groupUtilities
 	convertCmd.GroupID = groupUtilities
 	validateCmd.GroupID = groupUtilities
+	seedCmd.GroupID = groupUtilities
 
 	// Add subcommands
 	rootCmd.AddCommand(mountCmd)
 	rootCmd.AddCommand(convertCmd)
 	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(countCmd)
+	rootCmd.AddCommand(seedCmd)
 
 	return rootCmd
 }

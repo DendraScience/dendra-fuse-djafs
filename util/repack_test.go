@@ -73,24 +73,24 @@ func TestWorkDirPathToZipPath(t *testing.T) {
 	}{
 		{
 			name:     "simple path",
-			workDir:  "/storage/.work/123/00000",
-			basePath: "/storage/.work",
-			dataDir:  "/storage/.data",
-			want:     "/storage/.data/123-00000.djfz",
+			workDir:  "/storage/work/123/00000",
+			basePath: "/storage/work",
+			dataDir:  "/storage/data",
+			want:     "/storage/data/123-00000.djfz",
 		},
 		{
 			name:     "relative paths",
-			workDir:  ".work/456/00001",
-			basePath: ".work",
-			dataDir:  ".data",
-			want:     ".data/456-00001.djfz",
+			workDir:  "work/456/00001",
+			basePath: "work",
+			dataDir:  "data",
+			want:     "data/456-00001.djfz",
 		},
 		{
 			name:     "deep nesting",
-			workDir:  "/a/b/c/.work/789/00002",
-			basePath: "/a/b/c/.work",
-			dataDir:  "/a/b/c/.data",
-			want:     "/a/b/c/.data/789-00002.djfz",
+			workDir:  "/a/b/c/work/789/00002",
+			basePath: "/a/b/c/work",
+			dataDir:  "/a/b/c/data",
+			want:     "/a/b/c/data/789-00002.djfz",
 		},
 	}
 
@@ -107,8 +107,8 @@ func TestWorkDirPathToZipPath(t *testing.T) {
 
 func TestGCWorkDirs_CreatesDataDir(t *testing.T) {
 	baseDir := t.TempDir()
-	workDir := filepath.Join(baseDir, ".work")
-	dataDir := filepath.Join(baseDir, ".data")
+	workDir := filepath.Join(baseDir, "work")
+	dataDir := filepath.Join(baseDir, "data")
 
 	// Create work dir structure with a file
 	bucket := filepath.Join(workDir, "123", "00000")
@@ -144,8 +144,8 @@ func TestGCWorkDirs_EmptyWorkDir(t *testing.T) {
 
 func TestGCWorkDirs_PacksAndRemoves(t *testing.T) {
 	baseDir := t.TempDir()
-	workDir := filepath.Join(baseDir, ".work")
-	dataDir := filepath.Join(baseDir, ".data")
+	workDir := filepath.Join(baseDir, "work")
+	dataDir := filepath.Join(baseDir, "data")
 
 	// Create work dir structure with files
 	bucket := filepath.Join(workDir, "123", "00000")
