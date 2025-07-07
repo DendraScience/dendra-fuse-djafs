@@ -138,7 +138,7 @@ func CreateFileLookupEntry(path, workDirPath string, initial bool) (LookupEntry,
 	return l, err
 }
 
-// Does the opposite of GetOldestFileTS
+// GetNewestFileTS does the opposite of GetOldestFileTS :)
 func (l LookupTable) GetNewestFileTS() time.Time {
 	if l.Len() == 0 {
 		return time.Time{}

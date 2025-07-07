@@ -210,7 +210,7 @@ func (d *Dir) resolveSnapshotPath(name string) (fs.Node, error) {
 
 	// Handle hierarchical snapshot paths
 	pathParts := strings.Split(d.path, "/")
-	
+
 	if len(pathParts) == 3 {
 		// /snapshots/YYYY -> /snapshots/YYYY/MM
 		year := pathParts[2]
@@ -238,7 +238,7 @@ func (d *Dir) resolveSnapshotPath(name string) (fs.Node, error) {
 		// /snapshots/YYYY/MM -> /snapshots/YYYY/MM/DD
 		year := pathParts[2]
 		month := pathParts[3]
-		
+
 		// Check if it's a valid day (01-31)
 		if len(name) == 2 {
 			if day, err := strconv.Atoi(name); err == nil && day >= 1 && day <= 31 {
@@ -258,7 +258,7 @@ func (d *Dir) resolveSnapshotPath(name string) (fs.Node, error) {
 		year := pathParts[2]
 		month := pathParts[3]
 		day := pathParts[4]
-		
+
 		// Parse the date and set snapshot time
 		dateStr := year + "/" + month + "/" + day
 		var snapshotTime *time.Time
@@ -365,7 +365,7 @@ func (d *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 			Name:  "latest",
 			Type:  fuse.DT_Dir,
 		})
-		
+
 		years := d.fs.getAvailableSnapshotYears()
 		for _, year := range years {
 			dirents = append(dirents, fuse.Dirent{
@@ -453,7 +453,7 @@ func (d *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 		} else if strings.HasPrefix(d.path, "/snapshots/") {
 			// Handle hierarchical snapshot directory structure
 			pathParts := strings.Split(d.path, "/")
-			
+
 			if len(pathParts) == 3 {
 				// /snapshots/YYYY - list months
 				year := pathParts[2]
@@ -517,7 +517,7 @@ func (d *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 				year := pathParts[2]
 				month := pathParts[3]
 				day := pathParts[4]
-				
+
 				// Parse the date and set snapshot time
 				dateStr := year + "/" + month + "/" + day
 				var snapshotTime *time.Time

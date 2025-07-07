@@ -37,7 +37,7 @@ func pathsOverlap(path1, path2 string) bool {
 	// Convert to absolute paths and clean them
 	abs1, err1 := filepath.Abs(path1)
 	abs2, err2 := filepath.Abs(path2)
-	
+
 	// If we can't resolve absolute paths, compare as-is
 	if err1 != nil {
 		abs1 = filepath.Clean(path1)
@@ -45,7 +45,7 @@ func pathsOverlap(path1, path2 string) bool {
 	if err2 != nil {
 		abs2 = filepath.Clean(path2)
 	}
-	
+
 	// Ensure paths end with separator for accurate prefix checking
 	if !strings.HasSuffix(abs1, string(filepath.Separator)) {
 		abs1 += string(filepath.Separator)
@@ -53,7 +53,7 @@ func pathsOverlap(path1, path2 string) bool {
 	if !strings.HasSuffix(abs2, string(filepath.Separator)) {
 		abs2 += string(filepath.Separator)
 	}
-	
+
 	// Check if either path is a prefix of the other
 	return strings.HasPrefix(abs1, abs2) || strings.HasPrefix(abs2, abs1)
 }
