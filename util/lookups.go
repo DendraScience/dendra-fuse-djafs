@@ -220,4 +220,3 @@ func (l *LookupTable) Collapse() {
 	l.sorted = false
 	l.Sort()
 }
-

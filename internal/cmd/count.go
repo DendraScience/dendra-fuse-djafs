@@ -12,7 +12,7 @@ import (
 // It provides file counting functionality for directory trees.
 func NewCountCmd() *cobra.Command {
 	var (
-		path      string
+		path         string
 		showProgress bool
 	)
 
@@ -53,11 +53,11 @@ func runCount(path string, showProgress bool) {
 		}
 		return nil
 	})
-	
+
 	if err != nil {
 		fmt.Printf("Error counting files: %v\n", err)
 		return
 	}
-	
+
 	fmt.Printf("Total files: %d\n", count)
 }

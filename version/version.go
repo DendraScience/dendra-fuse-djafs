@@ -106,4 +106,3 @@ func PrintVersion(appName string) {
 	fmt.Printf("Commit: %s\n", info.Commit)
 	fmt.Printf("Build Date: %s\n", info.Date)
 }
-

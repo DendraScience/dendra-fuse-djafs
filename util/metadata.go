@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	
+
 	"github.com/dendrascience/dendra-archive-fuse/version"
 )
 

@@ -18,7 +18,8 @@
 //
 // Build Integration:
 // The Makefile sets version information at build time using:
-//   -ldflags "-X package/version.Version=v1.0.0 -X package/version.Commit=abc123 -X package/version.Date=2023-01-01T00:00:00Z"
+//
+//	-ldflags "-X package/version.Version=v1.0.0 -X package/version.Commit=abc123 -X package/version.Date=2023-01-01T00:00:00Z"
 //
 // This ensures consistent version reporting across all djafs binaries and subcommands.
 package version
