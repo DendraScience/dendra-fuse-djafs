@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
@@ -29,12 +31,44 @@ MOUNTPOINT is the directory where the filesystem will be mounted.`,
 	}
 }
 
+// pathsOverlap checks if two paths overlap (one contains the other).
+// It returns true if either path is a parent/child of the other.
+func pathsOverlap(path1, path2 string) bool {
+	// Convert to absolute paths and clean them
+	abs1, err1 := filepath.Abs(path1)
+	abs2, err2 := filepath.Abs(path2)
+	
+	// If we can't resolve absolute paths, compare as-is
+	if err1 != nil {
+		abs1 = filepath.Clean(path1)
+	}
+	if err2 != nil {
+		abs2 = filepath.Clean(path2)
+	}
+	
+	// Ensure paths end with separator for accurate prefix checking
+	if !strings.HasSuffix(abs1, string(filepath.Separator)) {
+		abs1 += string(filepath.Separator)
+	}
+	if !strings.HasSuffix(abs2, string(filepath.Separator)) {
+		abs2 += string(filepath.Separator)
+	}
+	
+	// Check if either path is a prefix of the other
+	return strings.HasPrefix(abs1, abs2) || strings.HasPrefix(abs2, abs1)
+}
+
 func runMount(cmd *cobra.Command, args []string) {
 	// Print version info on startup
 	fmt.Printf("djafs %s starting...\n", version.GetFullVersion())
 
 	storagePath := args[0]
 	mountpoint := args[1]
+
+	// Validate that storage path and mountpoint don't overlap
+	if pathsOverlap(storagePath, mountpoint) {
+		log.Fatalf("Storage path and mountpoint cannot overlap: storage=%s, mount=%s", storagePath, mountpoint)
+	}
 
 	// Ensure storage directory exists
 	if err := os.MkdirAll(storagePath, 0755); err != nil {
