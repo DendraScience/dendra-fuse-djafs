@@ -75,9 +75,13 @@ FUSE Interface (what applications see):
 │   │   └── sensor_001_1704067320.json
 │   └── 2024/01/02/
 └── snapshots/               <- Time-travel interface
-    ├── 2024/01/01/
-    ├── 2024/01/02/
-    └── 2024/02/02/
+    ├── latest/
+    ├── 2024/
+    │   ├── 01/
+    │   │   ├── 01/
+    │   │   └── 02/
+    │   └── 02/
+    └── 2025/
 
 Backend Storage (actual disk layout):
 /data/djafs/
@@ -376,20 +380,27 @@ cat /mnt/djafs/live/2024/01/01/reading.json
 ls -la /mnt/djafs/live/2024/01/01/
 
 # View snapshots
-ls /mnt/djafs/snapshots/
-ls /mnt/djafs/snapshots/2024-01-01T12:00:00Z/2024/01/01/
+ls /mnt/djafs/snapshots/        # Shows years: 2024, 2025, latest
+ls /mnt/djafs/snapshots/2024/   # Shows months: 01, 02, 03, ...
+ls /mnt/djafs/snapshots/2024/01/  # Shows days: 01, 02, 03, ...
+ls /mnt/djafs/snapshots/2024/01/01/2024/01/01/  # Shows files from that day
 ```
 
 ### Time-Travel Snapshots
 
 ```bash
-# View filesystem as it was at noon on Jan 1st
-cd /mnt/djafs/snapshots/2024-01-01T12:00:00Z/
+# Browse snapshots hierarchically
+ls /mnt/djafs/snapshots/        # Shows: latest, 2024, 2025, ...
+ls /mnt/djafs/snapshots/2024/   # Shows: 01, 02, 03, ... (months)
+ls /mnt/djafs/snapshots/2024/01/  # Shows: 01, 02, 03, ... (days)
+
+# View filesystem as it was on Jan 1st, 2024
+cd /mnt/djafs/snapshots/2024/01/01/
 ls 2024/01/01/                 # Only files that existed at that time
 
 # Compare different points in time
-diff /mnt/djafs/snapshots/2024-01-01T12:00:00Z/2024/01/01/data.json \
-     /mnt/djafs/snapshots/2024-01-01T18:00:00Z/2024/01/01/data.json
+diff /mnt/djafs/snapshots/2024/01/01/2024/01/01/data.json \
+     /mnt/djafs/snapshots/2024/01/02/2024/01/01/data.json
 ```
 
 ### Backup Operations

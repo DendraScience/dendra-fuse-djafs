@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -181,12 +182,7 @@ func (d *Dir) resolveLivePath(name string) (fs.Node, error) {
 // resolveSnapshotPath resolves paths within the /snapshots directory
 func (d *Dir) resolveSnapshotPath(name string) (fs.Node, error) {
 	if d.path == "/snapshots" {
-		// Root snapshots directory - list available snapshots
-		// For now, support a few predefined snapshot formats:
-		// - "latest" for most recent state
-		// - ISO timestamp format like "2024-01-01T12:00:00Z"
-		// - Date format like "2024-01-01"
-
+		// Root snapshots directory - handle year or "latest"
 		switch name {
 		case "latest":
 			return &Dir{
@@ -196,56 +192,83 @@ func (d *Dir) resolveSnapshotPath(name string) (fs.Node, error) {
 				snapshotTime: nil, // nil means latest
 			}, nil
 		default:
-			// Try to parse as timestamp
-			if timestamp, err := time.Parse(time.RFC3339, name); err == nil {
-				return &Dir{
-					fs:           d.fs,
-					path:         "/snapshots/" + name,
-					isSnapshot:   true,
-					snapshotTime: &timestamp,
-				}, nil
-			}
-
-			// Try to parse as date (assume end of day)
-			if date, err := time.Parse("2006-01-02", name); err == nil {
-				// Set to end of day
-				endOfDay := date.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
-				return &Dir{
-					fs:           d.fs,
-					path:         "/snapshots/" + name,
-					isSnapshot:   true,
-					snapshotTime: &endOfDay,
-				}, nil
+			// Check if it's a valid year
+			if len(name) == 4 {
+				if _, err := strconv.Atoi(name); err == nil {
+					// Valid year
+					return &Dir{
+						fs:         d.fs,
+						path:       "/snapshots/" + name,
+						isSnapshot: true,
+					}, nil
+				}
 			}
 		}
 
 		return nil, syscall.ENOENT
 	}
 
-	// Within a snapshot directory - resolve files and directories at that point in time
-	if strings.HasPrefix(d.path, "/snapshots/") {
-		// Extract the snapshot time from the path
-		pathParts := strings.Split(d.path, "/")
-		if len(pathParts) < 3 {
-			return nil, syscall.ENOENT
-		}
-
-		snapshotName := pathParts[2]
-		var snapshotTime *time.Time
-
-		if snapshotName != "latest" {
-			if timestamp, err := time.Parse(time.RFC3339, snapshotName); err == nil {
-				snapshotTime = &timestamp
-			} else if date, err := time.Parse("2006-01-02", snapshotName); err == nil {
-				endOfDay := date.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
-				snapshotTime = &endOfDay
-			} else {
-				return nil, syscall.ENOENT
+	// Handle hierarchical snapshot paths
+	pathParts := strings.Split(d.path, "/")
+	
+	if len(pathParts) == 3 {
+		// /snapshots/YYYY -> /snapshots/YYYY/MM
+		year := pathParts[2]
+		if year == "latest" {
+			// Handle latest snapshot navigation
+			return &Dir{
+				fs:           d.fs,
+				path:         d.path + "/" + name,
+				isSnapshot:   true,
+				snapshotTime: nil,
+			}, nil
+		} else {
+			// Check if it's a valid month (01-12)
+			if len(name) == 2 {
+				if month, err := strconv.Atoi(name); err == nil && month >= 1 && month <= 12 {
+					return &Dir{
+						fs:         d.fs,
+						path:       d.path + "/" + name,
+						isSnapshot: true,
+					}, nil
+				}
 			}
+		}
+	} else if len(pathParts) == 4 {
+		// /snapshots/YYYY/MM -> /snapshots/YYYY/MM/DD
+		year := pathParts[2]
+		month := pathParts[3]
+		
+		// Check if it's a valid day (01-31)
+		if len(name) == 2 {
+			if day, err := strconv.Atoi(name); err == nil && day >= 1 && day <= 31 {
+				// Validate the complete date
+				dateStr := year + "/" + month + "/" + name
+				if _, err := time.Parse("2006/01/02", dateStr); err == nil {
+					return &Dir{
+						fs:         d.fs,
+						path:       d.path + "/" + name,
+						isSnapshot: true,
+					}, nil
+				}
+			}
+		}
+	} else if len(pathParts) >= 5 {
+		// /snapshots/YYYY/MM/DD/... -> navigate within snapshot
+		year := pathParts[2]
+		month := pathParts[3]
+		day := pathParts[4]
+		
+		// Parse the date and set snapshot time
+		dateStr := year + "/" + month + "/" + day
+		var snapshotTime *time.Time
+		if date, err := time.Parse("2006/01/02", dateStr); err == nil {
+			endOfDay := date.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+			snapshotTime = &endOfDay
 		}
 
 		// Build the virtual path within the snapshot
-		virtualPath := strings.Join(pathParts[3:], "/")
+		virtualPath := strings.Join(pathParts[5:], "/")
 		if virtualPath != "" {
 			virtualPath = "/" + virtualPath
 		}
@@ -336,12 +359,18 @@ func (d *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 		})
 
 	case "/snapshots":
-		// List available snapshots
-		snapshots := d.fs.getAvailableSnapshots()
-		for _, snapshot := range snapshots {
+		// List available snapshot years plus "latest"
+		dirents = append(dirents, fuse.Dirent{
+			Inode: util.GetNewInode(),
+			Name:  "latest",
+			Type:  fuse.DT_Dir,
+		})
+		
+		years := d.fs.getAvailableSnapshotYears()
+		for _, year := range years {
 			dirents = append(dirents, fuse.Dirent{
 				Inode: util.GetNewInode(),
-				Name:  snapshot,
+				Name:  year,
 				Type:  fuse.DT_Dir,
 			})
 		}
@@ -422,25 +451,85 @@ func (d *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 				})
 			}
 		} else if strings.HasPrefix(d.path, "/snapshots/") {
-			// List files in snapshot directory
+			// Handle hierarchical snapshot directory structure
 			pathParts := strings.Split(d.path, "/")
-			if len(pathParts) >= 3 {
-				snapshotName := pathParts[2]
-				var snapshotTime *time.Time
-
-				if snapshotName != "latest" {
-					if timestamp, err := time.Parse(time.RFC3339, snapshotName); err == nil {
-						snapshotTime = &timestamp
-					} else if date, err := time.Parse("2006-01-02", snapshotName); err == nil {
-						endOfDay := date.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
-						snapshotTime = &endOfDay
+			
+			if len(pathParts) == 3 {
+				// /snapshots/YYYY - list months
+				year := pathParts[2]
+				if year == "latest" {
+					// Handle latest snapshot - show all files
+					entries, err := d.fs.getEntriesWithPrefixAtTime("", nil)
+					if err != nil {
+						return nil, err
 					}
+
+					dirs := make(map[string]bool)
+					for _, entry := range entries {
+						if entry.Target == "" {
+							continue
+						}
+
+						parts := strings.Split(entry.Name, "/")
+						if len(parts) == 1 {
+							dirents = append(dirents, fuse.Dirent{
+								Inode: entry.Inode,
+								Name:  entry.Name,
+								Type:  fuse.DT_File,
+							})
+						} else {
+							dirs[parts[0]] = true
+						}
+					}
+
+					for dir := range dirs {
+						dirents = append(dirents, fuse.Dirent{
+							Inode: util.GetNewInode(),
+							Name:  dir,
+							Type:  fuse.DT_Dir,
+						})
+					}
+				} else {
+					// List months for this year
+					months := d.fs.getAvailableSnapshotMonths(year)
+					for _, month := range months {
+						dirents = append(dirents, fuse.Dirent{
+							Inode: util.GetNewInode(),
+							Name:  month,
+							Type:  fuse.DT_Dir,
+						})
+					}
+				}
+			} else if len(pathParts) == 4 {
+				// /snapshots/YYYY/MM - list days
+				year := pathParts[2]
+				month := pathParts[3]
+				days := d.fs.getAvailableSnapshotDays(year, month)
+				for _, day := range days {
+					dirents = append(dirents, fuse.Dirent{
+						Inode: util.GetNewInode(),
+						Name:  day,
+						Type:  fuse.DT_Dir,
+					})
+				}
+			} else if len(pathParts) >= 5 {
+				// /snapshots/YYYY/MM/DD/... - show files at that date
+				year := pathParts[2]
+				month := pathParts[3]
+				day := pathParts[4]
+				
+				// Parse the date and set snapshot time
+				dateStr := year + "/" + month + "/" + day
+				var snapshotTime *time.Time
+				if date, err := time.Parse("2006/01/02", dateStr); err == nil {
+					endOfDay := date.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+					snapshotTime = &endOfDay
 				}
 
 				// Build the virtual path within the snapshot
 				virtualPath := ""
-				if len(pathParts) > 3 {
-					virtualPath = strings.Join(pathParts[3:], "/") + "/"
+				if len(pathParts) > 5 {
+					virtualPath = strings.Join(pathParts[5:], "/") + "/"
 				}
 
 				entries, err := d.fs.getEntriesWithPrefixAtTime(virtualPath, snapshotTime)
@@ -1076,15 +1165,9 @@ func (fs *FS) getAvailableSnapshots() []string {
 		}
 
 		for entry := range lookupTable.Iterate {
-			// Add date-based snapshots
-			dateStr := entry.Modified.Format("2006-01-02")
+			// Add date-based snapshots in yyyy/mm/dd format
+			dateStr := entry.Modified.Format("2006/01/02")
 			timestampSet[dateStr] = true
-
-			// Add hourly snapshots for recent dates (last 7 days)
-			if time.Since(entry.Modified) < 7*24*time.Hour {
-				hourStr := entry.Modified.Format("2006-01-02T15:04:05Z")
-				timestampSet[hourStr] = true
-			}
 		}
 
 		return nil
@@ -1098,6 +1181,118 @@ func (fs *FS) getAvailableSnapshots() []string {
 	}
 
 	return snapshots
+}
+
+// getAvailableSnapshotYears returns available years for snapshots
+func (fs *FS) getAvailableSnapshotYears() []string {
+	yearSet := make(map[string]bool)
+
+	err := filepath.Walk(fs.StoragePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if !strings.HasSuffix(path, "lookups.djfl") {
+			return nil
+		}
+
+		lookupTable, err := fs.loadLookupTable(path)
+		if err != nil {
+			return nil
+		}
+
+		for entry := range lookupTable.Iterate {
+			year := entry.Modified.Format("2006")
+			yearSet[year] = true
+		}
+
+		return nil
+	})
+
+	var years []string
+	if err == nil {
+		for year := range yearSet {
+			years = append(years, year)
+		}
+	}
+
+	return years
+}
+
+// getAvailableSnapshotMonths returns available months for a given year
+func (fs *FS) getAvailableSnapshotMonths(year string) []string {
+	monthSet := make(map[string]bool)
+
+	err := filepath.Walk(fs.StoragePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if !strings.HasSuffix(path, "lookups.djfl") {
+			return nil
+		}
+
+		lookupTable, err := fs.loadLookupTable(path)
+		if err != nil {
+			return nil
+		}
+
+		for entry := range lookupTable.Iterate {
+			if entry.Modified.Format("2006") == year {
+				month := entry.Modified.Format("01")
+				monthSet[month] = true
+			}
+		}
+
+		return nil
+	})
+
+	var months []string
+	if err == nil {
+		for month := range monthSet {
+			months = append(months, month)
+		}
+	}
+
+	return months
+}
+
+// getAvailableSnapshotDays returns available days for a given year/month
+func (fs *FS) getAvailableSnapshotDays(year, month string) []string {
+	daySet := make(map[string]bool)
+
+	err := filepath.Walk(fs.StoragePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if !strings.HasSuffix(path, "lookups.djfl") {
+			return nil
+		}
+
+		lookupTable, err := fs.loadLookupTable(path)
+		if err != nil {
+			return nil
+		}
+
+		for entry := range lookupTable.Iterate {
+			if entry.Modified.Format("2006") == year && entry.Modified.Format("01") == month {
+				day := entry.Modified.Format("02")
+				daySet[day] = true
+			}
+		}
+
+		return nil
+	})
+
+	var days []string
+	if err == nil {
+		for day := range daySet {
+			days = append(days, day)
+		}
+	}
+
+	return days
 }
 
 // findFileEntryAtTime finds a file entry at a specific point in time
