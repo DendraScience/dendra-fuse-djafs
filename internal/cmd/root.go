@@ -25,27 +25,34 @@ Use subcommands to perform different operations:
 		Version: version.GetFullVersion(),
 	}
 
-	// Add subcommands
-	rootCmd.AddCommand(NewMountCmd())
-	rootCmd.AddCommand(NewConvertCmd())
-	rootCmd.AddCommand(NewValidateCmd())
-	rootCmd.AddCommand(NewCountCmd())
+	groupUtilities := "utilities"
+	groupFilesystem := "filesystem"
 
 	// Add command groups for better organization
 	rootCmd.AddGroup(&cobra.Group{
-		ID:    "filesystem",
+		ID:    groupFilesystem,
 		Title: "Filesystem Operations",
 	})
 	rootCmd.AddGroup(&cobra.Group{
-		ID:    "utilities",
+		ID:    groupUtilities,
 		Title: "Utility Commands",
 	})
 
-	// Assign commands to groups
-	NewMountCmd().GroupID = "filesystem"
-	NewConvertCmd().GroupID = "utilities"
-	NewValidateCmd().GroupID = "utilities"
-	NewCountCmd().GroupID = "utilities"
+	mountCmd := NewMountCmd()
+	convertCmd := NewConvertCmd()
+	validateCmd := NewValidateCmd()
+	countCmd := NewCountCmd()
+
+	mountCmd.GroupID = groupFilesystem
+	countCmd.GroupID = groupUtilities
+	convertCmd.GroupID = groupUtilities
+	validateCmd.GroupID = groupUtilities
+
+	// Add subcommands
+	rootCmd.AddCommand(mountCmd)
+	rootCmd.AddCommand(convertCmd)
+	rootCmd.AddCommand(validateCmd)
+	rootCmd.AddCommand(countCmd)
 
 	return rootCmd
 }

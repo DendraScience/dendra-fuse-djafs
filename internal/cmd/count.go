@@ -53,7 +53,6 @@ func runCount(path string, showProgress bool) {
 		}
 		return nil
 	})
-
 	if err != nil {
 		fmt.Printf("Error counting files: %v\n", err)
 		return

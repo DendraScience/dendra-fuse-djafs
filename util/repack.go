@@ -13,8 +13,8 @@ import (
 
 var (
 	gcLock  sync.Mutex
-	WorkDir = ".work"
-	DataDir = ".data"
+	WorkDir = "work"
+	DataDir = "data"
 )
 
 // CopyToWorkDir copies a file to the work directory with the specified hash as filename.

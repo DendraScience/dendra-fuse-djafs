@@ -210,3 +210,98 @@ func ZipInside(path string, filesOnly bool) error {
 	}
 	return err
 }
+
+// ZipToOutput creates a ZIP archive from the source directory and saves it to the output directory.
+// If filesOnly is true, it only includes files (not subdirectories) in the archive.
+func ZipToOutput(sourcePath, outputPath string, filesOnly bool) error {
+	filename := "files.djfz"
+
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return ErrExpectedDirectory
+	}
+	
+	outpath := filepath.Join(outputPath, filename)
+	file, err := os.Create(outpath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	
+	w := zip.NewWriter(file)
+	defer w.Close()
+	
+	if filesOnly {
+		fileSet, err := os.ReadDir(sourcePath)
+		if err != nil {
+			return err
+		}
+		for _, v := range fileSet {
+			if v.IsDir() {
+				continue
+			}
+			
+			// Skip djafs files
+			suffix := filepath.Ext(v.Name())
+			if suffix == ".djfz" || suffix == ".djfl" || suffix == ".djfm" {
+				continue
+			}
+			
+			sourcefile := filepath.Join(sourcePath, v.Name())
+			f, err := os.Open(sourcefile)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			
+			writer, err := w.Create(v.Name())
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(writer, f)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		// Walk the directory tree and add all files
+		err = filepath.WalkDir(sourcePath, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			
+			if d.IsDir() {
+				return nil
+			}
+			
+			// Skip djafs files
+			suffix := filepath.Ext(d.Name())
+			if suffix == ".djfz" || suffix == ".djfl" || suffix == ".djfm" {
+				return nil
+			}
+			
+			// Get relative path for the zip entry
+			relPath, err := filepath.Rel(sourcePath, path)
+			if err != nil {
+				return err
+			}
+			
+			f, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			
+			writer, err := w.Create(relPath)
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(writer, f)
+			return err
+		})
+	}
+	return err
+}

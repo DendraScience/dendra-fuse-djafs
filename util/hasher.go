@@ -150,12 +150,17 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 		if err != nil {
 			return fmt.Errorf("error walking path %s: %w", subpath, err)
 		}
-		if filesOnly && info.IsDir() {
-			return filepath.SkipDir
-		}
+		
+		// Skip the root directory entry itself
 		if subpath == path {
 			return nil
 		}
+		
+		// If filesOnly is true, skip subdirectories (but not the files in the root)
+		if filesOnly && info.IsDir() {
+			return filepath.SkipDir
+		}
+		
 		le, err := CreateFileLookupEntry(subpath, filepath.Join(output, WorkDir), false)
 		if os.IsNotExist(err) {
 			return nil
@@ -171,6 +176,13 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 			return err
 		}
 
+		// Fix the Name field to be relative to the boundary path
+		relativePath, err := filepath.Rel(path, subpath)
+		if err != nil {
+			return fmt.Errorf("failed to get relative path: %w", err)
+		}
+		le.Name = relativePath
+
 		lt.Add(le)
 		return nil
 	})
@@ -178,21 +190,37 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 		return fmt.Errorf("error walking path %s: %w", path, err)
 	}
 	lt.Sort()
-	manifest := filepath.Join(path, "lookup.djfl")
+	
+	outputDir := filepath.Join(output, DataDir)
+	err = os.MkdirAll(outputDir, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create output directory %s: %w", outputDir, err)
+	}
+	
+	manifest := filepath.Join(outputDir, "lookups.djfl")
 	err = WriteJSONFile(manifest, lt)
 	if err != nil {
 		return err
 	}
-	err = ZipInside(path, filesOnly)
+	
+	// Create zip file in output directory instead of input directory
+	err = ZipToOutput(path, outputDir, filesOnly)
 	if err != nil {
 		return err
 	}
-	for e := range lt.Iterate {
-		err = os.Remove(e.Name)
-		if err != nil {
-			log.Printf("Failed to remove %s: %s", e.Name, err)
-		}
+	
+	// Generate and write metadata
+	metadata, err := lt.GenerateMetadata("")
+	if err != nil {
+		return fmt.Errorf("failed to generate metadata: %w", err)
 	}
+	
+	metadataPath := filepath.Join(outputDir, "metadata.djfm")
+	err = WriteJSONFile(metadataPath, metadata)
+	if err != nil {
+		return fmt.Errorf("failed to write metadata: %w", err)
+	}
+	
 	return nil
 }
 
