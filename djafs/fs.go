@@ -794,7 +794,7 @@ func (hc *HotCache) processFile(stagingPath, relPath string) {
 
 	// Copy to work directory
 	workDir := filepath.Join(hc.fs.StoragePath, util.WorkDir)
-	workPath, err := util.CopyToWorkDir(stagingPath, workDir, hash)
+	_, err = util.CopyToWorkDir(stagingPath, workDir, hash)
 	if err != nil {
 		fmt.Printf("Error copying file to work dir: %v\n", err)
 		return
@@ -807,12 +807,15 @@ func (hc *HotCache) processFile(stagingPath, relPath string) {
 		return
 	}
 
+	// Generate the target name for archive lookup
+	targetName := util.HashPathFromHash(hash)
+
 	entry := util.LookupEntry{
 		FileSize: info.Size(),
 		Inode:    util.GetNewInode(),
 		Modified: info.ModTime(),
 		Name:     relPath,
-		Target:   filepath.Base(workPath),
+		Target:   targetName,
 	}
 
 	// Update lookup table (simplified - would need proper boundary detection)

@@ -71,7 +71,7 @@ func CopyToWorkDir(path, workDirPath, hash string) (string, error) {
 // ListWorkDirs returns a list of all work directories found in the work directory path.
 // It scans for top-level directories that contain files to be processed.
 func ListWorkDirs(workDirPath string) ([]string, error) {
-	topLevel, err := filepath.Glob(filepath.Join(WorkDir, "*"))
+	topLevel, err := filepath.Glob(filepath.Join(workDirPath, "*"))
 	if err != nil {
 		return nil, err
 	}
@@ -88,65 +88,88 @@ func ListWorkDirs(workDirPath string) ([]string, error) {
 
 // WorkDirPathToZipPath converts a work directory path to the corresponding ZIP archive path.
 // It removes the work directory prefix and formats the path for archive naming.
-func WorkDirPathToZipPath(workDir string) string {
+// The basePath is the root work directory that should be stripped from workDir.
+func WorkDirPathToZipPath(workDir, basePath, dataDir string) string {
 	workDir = filepath.Clean(workDir)
-	wd := strings.TrimPrefix(workDir, WorkDir)
-	wd = strings.TrimPrefix(wd, "/")
-	wd = strings.ReplaceAll(wd, "/", "-")
-	return filepath.Join(DataDir, wd+".djfz")
+	basePath = filepath.Clean(basePath)
+	wd := strings.TrimPrefix(workDir, basePath)
+	wd = strings.TrimPrefix(wd, string(filepath.Separator))
+	wd = strings.ReplaceAll(wd, string(filepath.Separator), "-")
+	return filepath.Join(dataDir, wd+".djfz")
 }
 
-func worker(jobChan chan string, errChan chan error) error {
+// workerResult holds the result of a worker's processing
+type workerResult struct {
+	err error
+}
+
+func gcWorker(jobChan <-chan string, resultChan chan<- workerResult, basePath, dataDir string, wg *sync.WaitGroup) {
+	defer wg.Done()
 	for workDir := range jobChan {
-		err := PackWorkDir(workDir)
+		err := PackWorkDir(workDir, basePath, dataDir)
 		if err != nil {
-			errChan <- err
-			return err
+			resultChan <- workerResult{err: err}
+			continue
 		}
 		err = os.RemoveAll(workDir)
 		if err != nil {
-			errChan <- err
-			return err
+			resultChan <- workerResult{err: err}
+			continue
 		}
+		resultChan <- workerResult{err: nil}
 	}
-	errChan <- nil
-	return nil
 }
 
 // GCWorkDirs performs garbage collection on work directories by packing them into archives.
 // It processes all work directories concurrently and uses a lock to prevent concurrent execution.
-func GCWorkDirs(WorkDirPath string) error {
+func GCWorkDirs(workDirPath string) error {
 	gcLock.Lock()
 	defer gcLock.Unlock()
-	workDirs, err := ListWorkDirs(WorkDirPath)
+
+	workDirs, err := ListWorkDirs(workDirPath)
 	if err != nil {
 		return err
 	}
-	if _, statErr := os.Stat(DataDir); statErr != nil {
-		os.MkdirAll(DataDir, 0o755)
+	if len(workDirs) == 0 {
+		return nil
 	}
 
-	jobChan := make(chan string, 1)
-	errChan := make(chan error, runtime.NumCPU())
-	for range runtime.NumCPU() {
-		go worker(jobChan, errChan)
+	// Data directory is sibling to work directory
+	dataDir := filepath.Join(filepath.Dir(workDirPath), DataDir)
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return err
 	}
+
+	numWorkers := min(runtime.NumCPU(), len(workDirs))
+
+	jobChan := make(chan string, len(workDirs))
+	resultChan := make(chan workerResult, len(workDirs))
+
+	var wg sync.WaitGroup
+	wg.Add(numWorkers)
+	for range numWorkers {
+		go gcWorker(jobChan, resultChan, workDirPath, dataDir, &wg)
+	}
+
+	// Send all jobs
 	for _, workDir := range workDirs {
 		jobChan <- workDir
 	}
-
 	close(jobChan)
+
+	// Wait for workers to finish
+	wg.Wait()
+	close(resultChan)
 
 	// Collect errors
 	var errs []error
-	for range runtime.NumCPU() {
-		if err := <-errChan; err != nil {
-			errs = append(errs, err)
+	for result := range resultChan {
+		if result.err != nil {
+			errs = append(errs, result.err)
 		}
 	}
 
 	if len(errs) > 0 {
-		// Handle or return errors
 		return errors.Join(errs...)
 	}
 
@@ -155,43 +178,55 @@ func GCWorkDirs(WorkDirPath string) error {
 
 // PackWorkDir packs a work directory into a ZIP archive.
 // It checks if an existing archive exists and merges the contents if necessary.
-func PackWorkDir(workDir string) error {
-	// fmt.Println("workDir: ", workDir)
-	zipPath := WorkDirPathToZipPath(workDir)
-	// fmt.Println("zipPath: ", zipPath)
-	// before pack, check if zip file exists
-	// and merge
+func PackWorkDir(workDir, basePath, dataDir string) error {
+	zipPath := WorkDirPathToZipPath(workDir, basePath, dataDir)
 
-	_, err := os.Stat(zipPath)
-	if err == nil {
-		rc, err := zip.OpenReader(zipPath)
+	// Check if zip file exists and merge contents
+	if _, err := os.Stat(zipPath); err == nil {
+		if err := extractZipToDir(zipPath, workDir); err != nil {
+			return err
+		}
+	}
+
+	return CompressDirectoryToDest(workDir, zipPath)
+}
+
+// extractZipToDir extracts all files from a ZIP archive into a directory.
+func extractZipToDir(zipPath, destDir string) error {
+	rc, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+
+	for _, f := range rc.File {
+		fpath := filepath.Join(destDir, f.Name)
+
+		// Skip if file already exists (we keep the newer version in workDir)
+		if _, err := os.Stat(fpath); err == nil {
+			continue
+		}
+
+		srcFile, err := f.Open()
 		if err != nil {
 			return err
 		}
-		defer rc.Close()
-		// extract all files from the zip into
-		// the work dir
-		for _, f := range rc.File {
-			fpath := filepath.Join(workDir, f.Name)
-			newFile, err := os.Create(fpath)
-			if err != nil {
-				if errors.Is(err, os.ErrExist) {
-					continue
-				}
-				return err
+
+		destFile, err := os.Create(fpath)
+		if err != nil {
+			srcFile.Close()
+			if errors.Is(err, os.ErrExist) {
+				continue
 			}
-			defer newFile.Close()
-			cFile, err := f.Open()
-			if err != nil {
-				return err
-			}
-			defer cFile.Close()
-			_, err = io.Copy(newFile, cFile)
-			if err != nil {
-				return err
-			}
+			return err
+		}
+
+		_, err = io.Copy(destFile, srcFile)
+		srcFile.Close()
+		destFile.Close()
+		if err != nil {
+			return err
 		}
 	}
-	// fmt.Println("compressing work dir: ", workDir, " to zip: ", zipPath)
-	return CompressDirectoryToDest(workDir, zipPath)
+	return nil
 }

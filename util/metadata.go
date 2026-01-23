@@ -26,13 +26,12 @@ func GetVersion() string {
 	return version.GetVersion()
 }
 
-// TODO compressed size can't be done until the compression can take place
-// TODO there are some optimizations to be made when adding new files here, such
-// as incrementing counters and size provided a file is new, etc. instead of calling
-// LT member funcs
-
-// Using a Lookup Struct and passing the path to a zip file, we can create the
-// metadata struct file to accompany the zip
+// GenerateMetadata creates a Metadata struct from the lookup table.
+// If path is provided, it reads the compressed size from the file at that path.
+//
+// Note: CompressedSize will be 0 if path is empty since compression hasn't occurred yet.
+// Future optimization: incrementally update counters when adding files instead of
+// recalculating from the full lookup table each time.
 func (l LookupTable) GenerateMetadata(path string) (Metadata, error) {
 	var m Metadata
 	if path != "" {

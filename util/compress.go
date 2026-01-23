@@ -4,14 +4,11 @@ import (
 	"archive/zip"
 	"bufio"
 	"encoding/json"
-	"errors"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 )
-
-var ErrNotDJFZExtension = errors.New("file path extension is not '.djfz'")
 
 type DJFZ struct {
 	Path string
@@ -20,7 +17,7 @@ type DJFZ struct {
 // NewDJFZ creates a new DJFZ instance for the given file path.
 // It validates that the path has a .djfz extension and returns an error if not.
 func NewDJFZ(path string) (DJFZ, error) {
-	if filepath.Ext(path) != "djfz" {
+	if filepath.Ext(path) != ".djfz" {
 		return DJFZ{}, ErrNotDJFZExtension
 	}
 	return DJFZ{
@@ -47,17 +44,19 @@ func NewDJFZ(path string) (DJFZ, error) {
 // LookupFromDJFZ extracts and returns the lookup table from a DJFZ archive file.
 // It opens the .djfz file as a ZIP archive and reads the lookups.djfl file within it.
 func LookupFromDJFZ(path string) (LookupTable, error) {
-	if filepath.Ext(path) != "djfz" {
+	if filepath.Ext(path) != ".djfz" {
 		return LookupTable{}, ErrNotDJFZExtension
 	}
 	zrc, err := zip.OpenReader(path)
 	if err != nil {
 		return LookupTable{}, err
 	}
+	defer zrc.Close()
 	f, err := zrc.Open("lookups.djfl")
 	if err != nil {
 		return LookupTable{}, err
 	}
+	defer f.Close()
 	x := bufio.NewReader(f)
 	jd := json.NewDecoder(x)
 	lt := LookupTable{}
@@ -107,10 +106,11 @@ func CompressDirectoryToDest(path string, dest string) error {
 	if err != nil {
 		return err
 	}
+	defer file.Close()
+
 	w := zip.NewWriter(file)
 	defer w.Close()
 
-	// TODO:consider using a filewalker here instead of ReadDir
 	dirents, err := os.ReadDir(path)
 	if err != nil {
 		return err
@@ -119,21 +119,27 @@ func CompressDirectoryToDest(path string, dest string) error {
 		if v.IsDir() {
 			continue
 		}
-		f, openErr := os.Open(filepath.Join(path, v.Name()))
-		if openErr != nil {
-			return openErr
-		}
-		defer f.Close()
-		writer, createErr := w.Create(v.Name())
-		if createErr != nil {
-			return createErr
-		}
-		_, copyErr := io.Copy(writer, f)
-		if copyErr != nil {
-			return copyErr
+		if err := addFileToZip(w, filepath.Join(path, v.Name()), v.Name()); err != nil {
+			return err
 		}
 	}
 
+	return nil
+}
+
+// addFileToZip adds a single file to a zip archive with proper resource cleanup.
+func addFileToZip(w *zip.Writer, srcPath, nameInArchive string) error {
+	f, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	writer, err := w.Create(nameInArchive)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(writer, f)
 	return err
 }
 
@@ -154,8 +160,11 @@ func ZipInside(path string, filesOnly bool) error {
 	if err != nil {
 		return err
 	}
+	defer file.Close()
+
 	w := zip.NewWriter(file)
 	defer w.Close()
+
 	if filesOnly {
 		fileSet, err := os.ReadDir(path)
 		if err != nil {
@@ -163,51 +172,40 @@ func ZipInside(path string, filesOnly bool) error {
 		}
 		for _, v := range fileSet {
 			suffix := filepath.Ext(v.Name())
-			if suffix == "djfz" || suffix == "djfl" {
-				continue
-			}
-			if v.Name() == outpath {
+			if suffix == ".djfz" || suffix == ".djfl" {
 				continue
 			}
 			if v.IsDir() {
 				continue
 			}
-			f, err := os.Open(path)
-			if err != nil {
+			if err := addFileToZip(w, filepath.Join(path, v.Name()), v.Name()); err != nil {
 				return err
 			}
-			defer f.Close()
-			writer, err := w.Create(path)
-			if err != nil {
-				return err
-			}
-			io.Copy(writer, f)
-
 		}
 	} else {
-		// TODO there's a bug somewhere here, not sure where.
-		// I think we need to check to make sure we aren't including files at the
-		// current level, and only get stuff in subdirs
-		err = filepath.WalkDir(path, func(path string, d fs.DirEntry, _ error) error {
+		// Walk directory and add all files from subdirectories
+		basePath := path
+		err = filepath.WalkDir(path, func(walkPath string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
 			suffix := filepath.Ext(d.Name())
 			if suffix == ".djfz" || suffix == ".djfl" {
 				return nil
 			}
 			if d.IsDir() {
-				w.Create(filepath.Join(path, d.Name()) + "/")
 				return nil
 			}
-			f, openErr := os.Open(path)
-			if openErr != nil {
-				return openErr
+
+			// Calculate relative path for archive entry name
+			relPath, err := filepath.Rel(basePath, walkPath)
+			if err != nil {
+				return err
 			}
-			defer f.Close()
-			writer, createErr := w.Create(path)
-			if createErr != nil {
-				return createErr
-			}
-			io.Copy(writer, f)
-			return nil
+			// Use forward slashes in zip archive names for cross-platform compatibility
+			archiveName := filepath.ToSlash(relPath)
+
+			return addFileToZip(w, walkPath, archiveName)
 		})
 	}
 	return err

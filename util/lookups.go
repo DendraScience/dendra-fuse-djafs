@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"time"
@@ -17,7 +16,7 @@ type (
 		Inode    uint64    `json:"inode"`    // inode number of the file
 		Modified time.Time `json:"modified"` // modification time of the file
 		Name     string    `json:"name"`     // name of the file as it appears in FUSE
-		Target   string    `json:"target"`   // filepath of the hashed filename
+		Target   string    `json:"target"`   // content-addressed name in format "bucket-subbucket-hash", used as both archive entry name and work dir filename
 	}
 	LookupTable struct {
 		entries []LookupEntry
@@ -63,7 +62,7 @@ func (e *LookupTable) Add(le LookupEntry) {
 
 func (e *LookupTable) Remove(index int) error {
 	if index < 0 || index >= len(e.entries) {
-		return fmt.Errorf("index out of range")
+		return ErrIndexOutOfRange
 	}
 	e.entries = slices.Delete(e.entries, index, index+1)
 	return nil
@@ -76,25 +75,25 @@ func (e LookupTable) Get(index int) LookupEntry {
 	return e.entries[index]
 }
 
-func (e LookupTable) Sort() {
+func (e *LookupTable) Sort() {
 	sort.Sort(e)
 	e.sorted = true
 }
 
-func (e LookupTable) Len() int {
+func (e *LookupTable) Len() int {
 	return len(e.entries)
 }
 
-func (e LookupTable) Swap(i, j int) {
+func (e *LookupTable) Swap(i, j int) {
 	e.entries[i], e.entries[j] = e.entries[j], e.entries[i]
 }
 
-func (e LookupTable) Less(i, j int) bool {
+func (e *LookupTable) Less(i, j int) bool {
 	return e.entries[i].Modified.Before(e.entries[j].Modified)
 }
 
 // Returns the first modification entry, assuming the Entries slice is sorted.
-func (l LookupTable) GetOldestFileTS() time.Time {
+func (l *LookupTable) GetOldestFileTS() time.Time {
 	if l.Len() == 0 {
 		return time.Time{}
 	}
@@ -129,8 +128,9 @@ func CreateFileLookupEntry(path, workDirPath string, initial bool) (LookupEntry,
 		return l, err
 	}
 
+	targetName := HashPathFromHash(hash)
 	_, err = CopyToWorkDir(path, workDirPath, hash)
-	l.Target = filepath.Join(hash, filepath.Ext(path))
+	l.Target = targetName
 	l.Name = path
 	l.Modified = info.ModTime()
 	l.FileSize = info.Size()
@@ -139,7 +139,7 @@ func CreateFileLookupEntry(path, workDirPath string, initial bool) (LookupEntry,
 }
 
 // GetNewestFileTS does the opposite of GetOldestFileTS :)
-func (l LookupTable) GetNewestFileTS() time.Time {
+func (l *LookupTable) GetNewestFileTS() time.Time {
 	if l.Len() == 0 {
 		return time.Time{}
 	}
@@ -150,7 +150,7 @@ func (l LookupTable) GetNewestFileTS() time.Time {
 }
 
 // GetTotalFileCount returns the total number of content-unique files in the lookup table
-func (l LookupTable) GetTotalFileCount() int {
+func (l *LookupTable) GetTotalFileCount() int {
 	files := make(map[string]bool)
 	for e := range l.Iterate {
 		files[e.Name] = true
@@ -159,7 +159,7 @@ func (l LookupTable) GetTotalFileCount() int {
 }
 
 // GetTargetFileCount returns the total number of name-unique files in the lookup table
-func (l LookupTable) GetTargetFileCount() int {
+func (l *LookupTable) GetTargetFileCount() int {
 	files := make(map[string]bool)
 	for e := range l.Iterate {
 		files[e.Target] = true
@@ -168,18 +168,24 @@ func (l LookupTable) GetTargetFileCount() int {
 }
 
 // GetActiveFileCount returns the total number of content-unique files in the lookup table that are still active (after deletions)
-func (l LookupTable) GetActiveFileCount() int {
+func (l *LookupTable) GetActiveFileCount() int {
+	// Track latest state for each file name
 	files := make(map[string]bool)
 	for e := range l.Iterate {
-		files[e.Name] = true
-		if e.Target == "" {
-			files[e.Name] = false
+		// Empty Target means deletion
+		files[e.Name] = e.Target != ""
+	}
+	// Count only active files
+	count := 0
+	for _, active := range files {
+		if active {
+			count++
 		}
 	}
-	return len(files)
+	return count
 }
 
-func (l LookupTable) GetUncompressedSize() int {
+func (l *LookupTable) GetUncompressedSize() int {
 	total := 0
 	for e := range l.Iterate {
 		total += int(e.FileSize)
@@ -187,11 +193,9 @@ func (l LookupTable) GetUncompressedSize() int {
 	return total
 }
 
-// TODO add LookupTableCollapse function for combining consecutive entries
-// of the same name to target
-
-// LookupTableCollapse combines consecutive entries of the same name,
-// keeping only the most recent entry for each file
+// Collapse combines consecutive entries of the same name,
+// keeping only the most recent entry for each file.
+// This is useful for compacting the lookup table after many updates/deletions.
 func (l *LookupTable) Collapse() {
 	if len(l.entries) <= 1 {
 		return

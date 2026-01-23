@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 
@@ -21,12 +20,6 @@ import (
 // recommendation for ext3 is no more than 32000 files per directory
 // so if you increase this, don't increase it by too much
 const GlobalModulus = 5000
-
-var (
-	ErrExpectedFile      = fmt.Errorf("expected file, got directory")
-	ErrUnexpectedSymlink = fmt.Errorf("expected file, got symlink")
-	ErrInvalidHashPath   = fmt.Errorf("invalid hash path")
-)
 
 // RenameHashedFile renames a file to its content hash with the original extension.
 // It calculates the SHA-256 hash of the file content and renames the file accordingly.
@@ -142,7 +135,7 @@ func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTabl
 			}
 		}
 	}
-	sort.Sort(lt)
+	lt.Sort()
 	return lt, nil
 }
 
@@ -184,7 +177,7 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 	if err != nil {
 		return fmt.Errorf("error walking path %s: %w", path, err)
 	}
-	sort.Sort(lt)
+	lt.Sort()
 	manifest := filepath.Join(path, "lookup.djfl")
 	err = WriteJSONFile(manifest, lt)
 	if err != nil {
@@ -201,7 +194,6 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 		}
 	}
 	return nil
-	// TODO
 }
 
 // WriteJSONFile writes any value as JSON to the specified file path.
@@ -273,18 +265,56 @@ func HashFromHashPath(path string) (string, error) {
 	return parts[2], nil
 }
 
-// HashPathFromHash generates a hierarchical directory path from a content hash.
-// It uses color hashing to distribute files across directories and creates a path
-// in the format "first-second-hash" for efficient storage organization.
+// HashPathFromHash generates a content-addressed identifier from a hash.
+// The result is in the format "bucket-subbucket-hash" (e.g., "742-00000-abc123...")
+// and is used as both:
+//   - The filename in the work directory (.work/<result>)
+//   - The entry name inside archive files (.djfz)
+//   - The Target field in LookupEntry for file resolution
+//
+// The bucket (first component) is derived from a color hash mod 1000, giving 1000 buckets.
+// The subbucket (second component) uses a secondary hash for further distribution when needed.
+// This allows up to 1000 * 100000 = 100 million buckets total.
 func HashPathFromHash(hash string) string {
-	hInt := colorhash.HashString(hash)
-	hInt = hInt % 1000
-	first := hInt
-	second := 0
-	// TODO check if directory is getting too big and split
+	return HashPathFromHashWithSubbucket(hash, 0)
+}
 
-	third := hash
-	return fmt.Sprintf("%d-%05d-%s", first, second, third)
+// HashPathFromHashWithSubbucket generates a hash path with a specific subbucket.
+// This is useful when the default bucket is full and files need to be distributed
+// to additional subbuckets.
+func HashPathFromHashWithSubbucket(hash string, subbucket int) string {
+	hInt := colorhash.HashString(hash)
+	bucket := hInt % 1000
+	return fmt.Sprintf("%d-%05d-%s", bucket, subbucket, hash)
+}
+
+// GetSubbucketFromHash returns a secondary subbucket index based on the hash.
+// This can be used to distribute files when a primary bucket gets too large.
+// Returns a value from 0-99999.
+func GetSubbucketFromHash(hash string) int {
+	// Use the last 5 characters of the hash as the secondary bucket
+	if len(hash) < 5 {
+		return 0
+	}
+	var subbucket int
+	for i := len(hash) - 5; i < len(hash); i++ {
+		subbucket = subbucket*16 + hexCharToInt(hash[i])
+	}
+	return subbucket % 100000
+}
+
+// hexCharToInt converts a hex character to its integer value.
+func hexCharToInt(c byte) int {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0')
+	case c >= 'a' && c <= 'f':
+		return int(c - 'a' + 10)
+	case c >= 'A' && c <= 'F':
+		return int(c - 'A' + 10)
+	default:
+		return 0
+	}
 }
 
 // WorkspacePrefixFromHashPath extracts the workspace directory prefix from a hash path.
