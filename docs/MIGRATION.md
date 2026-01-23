@@ -4,7 +4,7 @@ This guide covers migrating from a traditional filesystem to djafs-backed storag
 
 ## Prerequisites
 
-- Ubuntu 22.04+ LTS
+- Ubuntu 18.04+ LTS
 - ext4 volume with sufficient storage (current data + 30% headroom)
 - FUSE3 support
 - Ability to pause/resume queue subscribers
