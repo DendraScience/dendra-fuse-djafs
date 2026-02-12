@@ -589,7 +589,11 @@ type File struct {
 func (f *File) Attr(ctx context.Context, a *fuse.Attr) error {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
+	return f.fillAttr(a)
+}
 
+// fillAttr fills the fuse.Attr struct without acquiring locks (helper for Attr and Setattr)
+func (f *File) fillAttr(a *fuse.Attr) error {
 	if f.isNew {
 		a.Inode = util.GetNewInode()
 		a.Mode = 0o644
