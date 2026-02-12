@@ -694,8 +694,8 @@ func (f *File) Setattr(ctx context.Context, req *fuse.SetattrRequest, resp *fuse
 		f.modified = req.Mtime
 	}
 
-	// Return current attributes
-	return f.Attr(ctx, &resp.Attr)
+	// Return current attributes (already holding write lock, use unlocked helper)
+	return f.fillAttr(&resp.Attr)
 }
 
 // Hot Cache Methods
