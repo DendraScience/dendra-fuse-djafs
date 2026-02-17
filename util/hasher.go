@@ -143,6 +143,14 @@ func CreateInitialDJAFSManifest(path, output string, filesOnly bool) (LookupTabl
 // It generates a manifest, compresses the directory, and creates the final archive.
 // If includeSubdirs is true, subdirectories are included in the archive.
 func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
+	return CreateDJAFSArchiveWithPath(path, output, "", includeSubdirs)
+}
+
+// CreateDJAFSArchiveWithPath creates a complete DJFZ archive from a directory path.
+// It generates a manifest, compresses the directory, and creates the final archive.
+// The relativePath parameter determines where in the output directory structure the archive will be created.
+// If includeSubdirs is true, subdirectories are included in the archive.
+func CreateDJAFSArchiveWithPath(path, output, relativePath string, includeSubdirs bool) error {
 	filesOnly := !includeSubdirs
 	lt := LookupTable{sorted: false, entries: []LookupEntry{}}
 
@@ -156,9 +164,18 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 			return nil
 		}
 		
-		// If filesOnly is true, skip subdirectories (but not the files in the root)
-		if filesOnly && info.IsDir() {
-			return filepath.SkipDir
+		// Skip directories - we only want files
+		if info.IsDir() {
+			return nil
+		}
+		
+		// If filesOnly is true, skip files in subdirectories
+		if filesOnly {
+			// Check if this file is in a subdirectory
+			dir := filepath.Dir(subpath)
+			if dir != path {
+				return filepath.SkipDir
+			}
 		}
 		
 		le, err := CreateFileLookupEntry(subpath, filepath.Join(output, WorkDir), false)
@@ -177,11 +194,11 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 		}
 
 		// Fix the Name field to be relative to the boundary path
-		relativePath, err := filepath.Rel(path, subpath)
+		relativeToPath, err := filepath.Rel(path, subpath)
 		if err != nil {
 			return fmt.Errorf("failed to get relative path: %w", err)
 		}
-		le.Name = relativePath
+		le.Name = relativeToPath
 
 		lt.Add(le)
 		return nil
@@ -191,7 +208,7 @@ func CreateDJAFSArchive(path, output string, includeSubdirs bool) error {
 	}
 	lt.Sort()
 	
-	outputDir := filepath.Join(output, DataDir)
+	outputDir := filepath.Join(output, DataDir, relativePath)
 	err = os.MkdirAll(outputDir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create output directory %s: %w", outputDir, err)

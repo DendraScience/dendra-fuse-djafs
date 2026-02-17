@@ -118,7 +118,14 @@ func runConvert(inputPath, outputPath string, verbose, dryRun bool) {
 			fmt.Printf("Processing archive %d/%d: %s\n", i+1, len(boundaries), boundary.Path)
 		}
 
-		err := util.CreateDJAFSArchive(boundary.Path, outputPath, !boundary.IncludeSubdirs)
+		// Calculate relative path from input to boundary
+		relativePath, err := filepath.Rel(inputPath, boundary.Path)
+		if err != nil {
+			log.Printf("Warning: Failed to get relative path for %s: %v", boundary.Path, err)
+			relativePath = ""
+		}
+
+		err = util.CreateDJAFSArchiveWithPath(boundary.Path, outputPath, relativePath, !boundary.IncludeSubdirs)
 		if err != nil {
 			log.Printf("Warning: Failed to create archive for %s: %v", boundary.Path, err)
 			continue
