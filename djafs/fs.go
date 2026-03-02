@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -18,6 +19,9 @@ import (
 	"bazil.org/fuse/fs"
 	"github.com/dendrascience/dendra-archive-fuse/util"
 )
+
+// errFound is a sentinel error used to break out of filepath.Walk.
+var errFound = errors.New("found")
 
 // FS implements the djafs FUSE filesystem
 type FS struct {
@@ -94,13 +98,17 @@ func (fs *FS) Root() (fs.Node, error) {
 type Dir struct {
 	fs           *FS
 	path         string
+	inode        uint64
 	isSnapshot   bool
 	snapshotTime *time.Time
 }
 
 // Attr returns directory attributes
 func (d *Dir) Attr(ctx context.Context, a *fuse.Attr) error {
-	a.Inode = 1 // Root directory gets inode 1
+	if d.inode == 0 {
+		d.inode = util.GetNewInode()
+	}
+	a.Inode = d.inode
 	a.Mode = os.ModeDir | 0o755
 	a.Mtime = time.Now()
 	a.Ctime = time.Now()
@@ -1010,14 +1018,14 @@ func (fs *FS) hasFilesWithPrefix(prefix string) bool {
 
 		for entry := range lookupTable.Iterate {
 			if entry.Target != "" && strings.HasPrefix(entry.Name, prefix) {
-				return fmt.Errorf("found") // Use error to break out of walk
+				return errFound
 			}
 		}
 
 		return nil
 	})
 
-	return err != nil && err.Error() == "found"
+	return errors.Is(err, errFound)
 }
 
 // getAllEntries returns all file entries from all lookup tables
@@ -1138,14 +1146,14 @@ func (fs *FS) findArchiveForTarget(target string) (string, error) {
 		for _, f := range r.File {
 			if f.Name == target {
 				foundArchive = path
-				return fmt.Errorf("found") // Use error to break out of walk
+				return errFound
 			}
 		}
 
 		return nil
 	})
 
-	if err != nil && err.Error() == "found" {
+	if errors.Is(err, errFound) {
 		return foundArchive, nil
 	}
 
@@ -1382,14 +1390,14 @@ func (fs *FS) hasFilesWithPrefixAtTime(prefix string, snapshotTime *time.Time) b
 		// Check if any of the latest entries match our prefix and are not deleted
 		for _, entry := range latestEntries {
 			if entry.Target != "" && strings.HasPrefix(entry.Name, prefix) {
-				return fmt.Errorf("found") // Use error to break out of walk
+				return errFound
 			}
 		}
 
 		return nil
 	})
 
-	return err != nil && err.Error() == "found"
+	return errors.Is(err, errFound)
 }
 
 // getEntriesWithPrefixAtTime returns entries that start with the given prefix at a specific time

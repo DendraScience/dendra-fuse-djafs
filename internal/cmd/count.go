@@ -28,6 +28,8 @@ quick statistics about directory contents.`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if len(args) > 0 {
 				path = args[0]
+			} else if !cmd.Flags().Changed("path") {
+				path = "./"
 			}
 			runCount(path, showProgress)
 		},
