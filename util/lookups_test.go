@@ -109,7 +109,7 @@ func TestLookupTable_GetActiveFileCount(t *testing.T) {
 			name: "file deleted then recreated",
 			entries: []LookupEntry{
 				{Name: "file1", Target: "hash1", Modified: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)},
-				{Name: "file1", Target: "", Modified: time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)},     // deleted
+				{Name: "file1", Target: "", Modified: time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)},      // deleted
 				{Name: "file1", Target: "hash3", Modified: time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC)}, // recreated
 			},
 			want: 1, // Latest state is active
@@ -120,7 +120,7 @@ func TestLookupTable_GetActiveFileCount(t *testing.T) {
 				{Name: "file1", Target: "hash1"},
 				{Name: "file1", Target: "hash2"}, // update
 				{Name: "file2", Target: "hash3"},
-				{Name: "file2", Target: ""},      // delete
+				{Name: "file2", Target: ""}, // delete
 				{Name: "file3", Target: "hash4"},
 			},
 			want: 2, // file1 and file3 active, file2 deleted

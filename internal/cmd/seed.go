@@ -146,7 +146,7 @@ func runSeed(outputPath string, fileCount int, verbose bool) {
 	if verbose {
 		fmt.Printf("Successfully created %d files\n", filesCreated)
 		fmt.Printf("Files distributed across %d directories\n", len(dirFileCounts))
-		
+
 		// Show some statistics
 		maxFiles := 0
 		minFiles := 1000

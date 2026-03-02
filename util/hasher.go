@@ -158,17 +158,17 @@ func CreateDJAFSArchiveWithPath(path, output, relativePath string, includeSubdir
 		if err != nil {
 			return fmt.Errorf("error walking path %s: %w", subpath, err)
 		}
-		
+
 		// Skip the root directory entry itself
 		if subpath == path {
 			return nil
 		}
-		
+
 		// Skip directories - we only want files
 		if info.IsDir() {
 			return nil
 		}
-		
+
 		// If filesOnly is true, skip files in subdirectories
 		if filesOnly {
 			// Check if this file is in a subdirectory
@@ -177,7 +177,7 @@ func CreateDJAFSArchiveWithPath(path, output, relativePath string, includeSubdir
 				return filepath.SkipDir
 			}
 		}
-		
+
 		le, err := CreateFileLookupEntry(subpath, filepath.Join(output, WorkDir), false)
 		if os.IsNotExist(err) {
 			return nil
@@ -207,37 +207,37 @@ func CreateDJAFSArchiveWithPath(path, output, relativePath string, includeSubdir
 		return fmt.Errorf("error walking path %s: %w", path, err)
 	}
 	lt.Sort()
-	
+
 	outputDir := filepath.Join(output, DataDir, relativePath)
 	err = os.MkdirAll(outputDir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create output directory %s: %w", outputDir, err)
 	}
-	
+
 	manifest := filepath.Join(outputDir, "lookups.djfl")
 	err = WriteJSONFile(manifest, lt)
 	if err != nil {
 		return err
 	}
-	
+
 	// Create zip file in output directory instead of input directory
 	err = ZipToOutput(path, outputDir, filesOnly)
 	if err != nil {
 		return err
 	}
-	
+
 	// Generate and write metadata
 	metadata, err := lt.GenerateMetadata("")
 	if err != nil {
 		return fmt.Errorf("failed to generate metadata: %w", err)
 	}
-	
+
 	metadataPath := filepath.Join(outputDir, "metadata.djfm")
 	err = WriteJSONFile(metadataPath, metadata)
 	if err != nil {
 		return fmt.Errorf("failed to write metadata: %w", err)
 	}
-	
+
 	return nil
 }
 

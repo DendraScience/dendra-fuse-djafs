@@ -25,22 +25,6 @@ func NewDJFZ(path string) (DJFZ, error) {
 	}, nil
 }
 
-//func (d *DJFZ) LookupTable() (LookupTable, error) {
-//	zrc, err := zip.OpenReader(d.Path)
-//	if err != nil {
-//		return LookupTable{}, err
-//	}
-//	f, err := zrc.Open("lookups.djfl")
-//	if err != nil {
-//		return LookupTable{}, err
-//	}
-//	x := bufio.NewReader(f)
-//	jd := json.NewDecoder(x)
-//	lt := LookupTable{}
-//	err = jd.Decode(&lt)
-//	return lt, err
-//}
-
 // LookupFromDJFZ extracts and returns the lookup table from a DJFZ archive file.
 // It opens the .djfz file as a ZIP archive and reads the lookups.djfl file within it.
 func LookupFromDJFZ(path string) (LookupTable, error) {
@@ -223,17 +207,17 @@ func ZipToOutput(sourcePath, outputPath string, filesOnly bool) error {
 	if !info.IsDir() {
 		return ErrExpectedDirectory
 	}
-	
+
 	outpath := filepath.Join(outputPath, filename)
 	file, err := os.Create(outpath)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
-	
+
 	w := zip.NewWriter(file)
 	defer w.Close()
-	
+
 	if filesOnly {
 		fileSet, err := os.ReadDir(sourcePath)
 		if err != nil {
@@ -243,26 +227,14 @@ func ZipToOutput(sourcePath, outputPath string, filesOnly bool) error {
 			if v.IsDir() {
 				continue
 			}
-			
+
 			// Skip djafs files
 			suffix := filepath.Ext(v.Name())
 			if suffix == ".djfz" || suffix == ".djfl" || suffix == ".djfm" {
 				continue
 			}
-			
-			sourcefile := filepath.Join(sourcePath, v.Name())
-			f, err := os.Open(sourcefile)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			
-			writer, err := w.Create(v.Name())
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(writer, f)
-			if err != nil {
+
+			if err := addFileToZip(w, filepath.Join(sourcePath, v.Name()), v.Name()); err != nil {
 				return err
 			}
 		}
@@ -272,35 +244,24 @@ func ZipToOutput(sourcePath, outputPath string, filesOnly bool) error {
 			if err != nil {
 				return err
 			}
-			
+
 			if d.IsDir() {
 				return nil
 			}
-			
+
 			// Skip djafs files
 			suffix := filepath.Ext(d.Name())
 			if suffix == ".djfz" || suffix == ".djfl" || suffix == ".djfm" {
 				return nil
 			}
-			
+
 			// Get relative path for the zip entry
 			relPath, err := filepath.Rel(sourcePath, path)
 			if err != nil {
 				return err
 			}
-			
-			f, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			
-			writer, err := w.Create(relPath)
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(writer, f)
-			return err
+
+			return addFileToZip(w, path, relPath)
 		})
 	}
 	return err

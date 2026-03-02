@@ -32,7 +32,6 @@ type Archive struct {
 	Path        string
 	LookupTable util.LookupTable
 	LastAccess  time.Time
-	mu          sync.RWMutex
 }
 
 // HotCache manages the write buffer for immediate write completion
@@ -41,8 +40,8 @@ type HotCache struct {
 	StagingDir  string
 	fs          *FS
 	gcTicker    *time.Ticker
-	stopGC      chan bool
 	mu          sync.RWMutex
+	stopGC      chan bool
 }
 
 // NewFS creates a new djafs filesystem instance
@@ -615,17 +614,22 @@ func (f *File) fillAttr(a *fuse.Attr) error {
 // ReadAll reads the entire file content
 func (f *File) ReadAll(ctx context.Context) ([]byte, error) {
 	f.mu.RLock()
-	defer f.mu.RUnlock()
-
-	if f.isNew {
-		return f.data, nil
+	if f.isNew || f.data != nil {
+		data := f.data
+		f.mu.RUnlock()
+		return data, nil
 	}
+	f.mu.RUnlock()
 
+	// Load file content from archive (requires write lock to cache)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	// Double-check after acquiring write lock
 	if f.data != nil {
 		return f.data, nil
 	}
 
-	// Load file content from archive
 	data, err := f.fs.loadFileContent(f.entry)
 	if err != nil {
 		return nil, err
@@ -1151,44 +1155,6 @@ func (fs *FS) findArchiveForTarget(target string) (string, error) {
 // Snapshot-related methods
 
 // getAvailableSnapshots returns a list of available snapshot timestamps
-func (fs *FS) getAvailableSnapshots() []string {
-	snapshots := []string{"latest"}
-
-	// Collect unique timestamps from all lookup tables
-	timestampSet := make(map[string]bool)
-
-	err := filepath.Walk(fs.StoragePath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil // Continue walking on errors
-		}
-
-		if !strings.HasSuffix(path, "lookups.djfl") {
-			return nil
-		}
-
-		lookupTable, err := fs.loadLookupTable(path)
-		if err != nil {
-			return nil // Continue on errors
-		}
-
-		for entry := range lookupTable.Iterate {
-			// Add date-based snapshots in yyyy/mm/dd format
-			dateStr := entry.Modified.Format("2006/01/02")
-			timestampSet[dateStr] = true
-		}
-
-		return nil
-	})
-
-	if err == nil {
-		// Convert set to sorted slice
-		for timestamp := range timestampSet {
-			snapshots = append(snapshots, timestamp)
-		}
-	}
-
-	return snapshots
-}
 
 // getAvailableSnapshotYears returns available years for snapshots
 func (fs *FS) getAvailableSnapshotYears() []string {
