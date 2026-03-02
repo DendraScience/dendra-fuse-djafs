@@ -172,7 +172,7 @@ func runLegacyConvert(inputPath, outputPath string, thresholdSize, thresholdTole
 
 	if !dryRun {
 		// Create the filesystem.
-		os.MkdirAll(outputPath, 0o777)
+		os.MkdirAll(outputPath, 0o755)
 	}
 
 	boundaries, err := util.DetermineZipBoundaries(inputPath, thresholdSize)
@@ -199,7 +199,7 @@ func runLegacyConvert(inputPath, outputPath string, thresholdSize, thresholdTole
 		}
 		subpath := strings.TrimPrefix(boundary.Path, inputPath)
 		newPath := filepath.Join(outputPath, util.DataDir, subpath)
-		err = os.MkdirAll(newPath, 0o777)
+		err = os.MkdirAll(newPath, 0o755)
 		if err != nil {
 			log.Fatalf("Failed to create directory: %v", err)
 		}

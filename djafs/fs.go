@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -77,8 +78,12 @@ func NewHotCache(fs *FS, storagePath string) *HotCache {
 	}
 
 	// Create directories
-	os.MkdirAll(hc.IncomingDir, 0755)
-	os.MkdirAll(hc.StagingDir, 0755)
+	if err := os.MkdirAll(hc.IncomingDir, 0o755); err != nil {
+		return nil
+	}
+	if err := os.MkdirAll(hc.StagingDir, 0o755); err != nil {
+		return nil
+	}
 
 	// Start background garbage collection
 	go hc.backgroundGC()
@@ -731,7 +736,7 @@ func (hc *HotCache) WriteFile(path string, data []byte) error {
 	fullPath := filepath.Join(hc.IncomingDir, path)
 	dir := filepath.Dir(fullPath)
 
-	err := os.MkdirAll(dir, 0755)
+	err := os.MkdirAll(dir, 0o755)
 	if err != nil {
 		return fmt.Errorf("failed to create directory structure: %w", err)
 	}
@@ -782,7 +787,7 @@ func (hc *HotCache) processFiles() {
 		stagingPath := filepath.Join(hc.StagingDir, relPath)
 		stagingDir := filepath.Dir(stagingPath)
 
-		os.MkdirAll(stagingDir, 0755)
+		_ = os.MkdirAll(stagingDir, 0o755)
 		err = os.Rename(path, stagingPath)
 		if err != nil {
 			return nil // Continue on errors
@@ -795,7 +800,7 @@ func (hc *HotCache) processFiles() {
 	})
 	if err != nil {
 		// Log error but continue
-		fmt.Printf("Error during GC walk: %v\n", err)
+		log.Printf("Error during GC walk: %v\n", err)
 	}
 }
 
@@ -804,7 +809,7 @@ func (hc *HotCache) processFile(stagingPath, relPath string) {
 	// Calculate hash
 	hash, err := util.GetFileHash(stagingPath)
 	if err != nil {
-		fmt.Printf("Error hashing file %s: %v\n", stagingPath, err)
+		log.Printf("Error hashing file %s: %v\n", stagingPath, err)
 		return
 	}
 
@@ -812,14 +817,14 @@ func (hc *HotCache) processFile(stagingPath, relPath string) {
 	workDir := filepath.Join(hc.fs.StoragePath, util.WorkDir)
 	_, err = util.CopyToWorkDir(stagingPath, workDir, hash)
 	if err != nil {
-		fmt.Printf("Error copying file to work dir: %v\n", err)
+		log.Printf("Error copying file to work dir: %v\n", err)
 		return
 	}
 
 	// Create lookup entry
 	info, err := os.Stat(stagingPath)
 	if err != nil {
-		fmt.Printf("Error getting file info: %v\n", err)
+		log.Printf("Error getting file info: %v\n", err)
 		return
 	}
 
@@ -837,7 +842,7 @@ func (hc *HotCache) processFile(stagingPath, relPath string) {
 	// Update lookup table (simplified - would need proper boundary detection)
 	err = hc.updateLookupTable(entry)
 	if err != nil {
-		fmt.Printf("Error updating lookup table: %v\n", err)
+		log.Printf("Error updating lookup table: %v\n", err)
 		return
 	}
 
